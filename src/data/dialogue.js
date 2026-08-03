@@ -1,6 +1,8 @@
 // Raider taunts, quest-giver names and the branching NPC dialogue tree.
 // Extracted verbatim from src/main.js (step 2: data/code separation).
 // Text and values are unchanged.
+import { MAXHP } from './balance.js';
+
 // ===== "STATE OF NATURE" TAUNTS — lines that make the point explicit: here there is no
 // law, no judge, no punishment, so anyone may do anything to anyone. This is what turns a
 // plain survival game into an experience of UNLIMITED FREEDOM (and its terror). =====
