@@ -68,6 +68,35 @@ else if (d >= 3)  this.wounds = Math.max(0, this.wounds - 1);       // 상처 -1
 
 ---
 
+## moodTail()이 항상 빈 문자열을 반환한다 (2단계에서 발견, 동작 보존)
+
+`STORIES`의 intro 5곳이 `intro:"…" + moodTail()` 형태로 되어 있다. 이는 함수가 아니라
+**문자열 연결**이므로 `STORIES`가 만들어지는 시점에 딱 한 번 평가된다. 그 시점의
+`S.day`는 항상 `1`이고, `moodTail()`은 다음과 같다.
+
+```js
+function moodTail(){
+  if(S.day<=3) return "";
+  if(S.day<=4) return "\n요즘은 다들 예민해졌다. …";
+  return "\n며칠 사이 사람이 변했다. …";
+}
+```
+
+따라서 **`""`만 반환되며, day 4+ / day 5+ 분기의 두 문장은 게임에서 한 번도 나오지
+않는다.** 날이 갈수록 NPC 소개문이 어두워지도록 의도한 장치가 작동하지 않는 셈이다.
+
+2단계는 순수 구조 변경이므로 그대로 보존했다 — `data/dialogue.js`의
+`createStories(S, moodTail)`도 로드 시점에 한 번 호출되어 결과가 동일하다.
+
+되살리려면 `intro`를 문자열 대신 함수(또는 게터)로 바꾸고 호출부
+(`startBattle`의 `st.intro`)에서 평가해야 한다. 이것도 **텍스트가 새로 노출되는
+동작 변경**이므로 별도 결정이 필요하다.
+
+관련 위치: `src/data/dialogue.js`의 `medic`, `smith`, `farmer`, `sleeper`, `deserter`
+5개 스토리 intro.
+
+---
+
 ## S.hunger-=24 반올림 불일치 (수정 안 함 — 가독성 우선)
 
 `S.food=Math.max(0,S.food-3)` 2곳(`가진 걸 내주고 사과한다`, `가진 걸 내주고 물러선다`)을

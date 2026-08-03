@@ -1,28 +1,17 @@
+import { COL } from './data/palette.js';
+import { WEAPONS, WEAPON_ORDER, ARMOR_KINDS, ARMOR_NAME } from './data/weapons.js';
+import { RTYPE, rollType } from './data/enemies.js';
+import { FOOD_TYPES, CRITTER_TYPES, MAT_ICON, createRecipes } from './data/items.js';
+import { TAUNTS_ATTACK, TAUNTS_BETRAY, QUEST_NAMES, createStories } from './data/dialogue.js';
+import { openingScenes, buildEnding } from './data/story.js';
+import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF, MOVE, SPAWN } from './data/balance.js';
 (function(){
   var cv=document.getElementById('screen'), ctx=cv.getContext('2d');
-  var VW=640, VH=360, TILE=40;
-  // Render at 2× backing resolution for crisp, higher-quality visuals while keeping
-  // the game's logical coordinate space (VW×VH) unchanged. Everything drawn in game
-  // coords is scaled up by the device pixel ratio × 2.
-  var RES=2;
   cv.width=VW*RES; cv.height=VH*RES;
   ctx.scale(RES,RES);
   ctx.imageSmoothingEnabled=true;
   ctx.imageSmoothingQuality='high';
-  var MAPC=48, MAPR=40, MW=MAPC*TILE, MH=MAPR*TILE;
 
-  // ---- terrain palette (violet dusk / state-of-nature) ----
-  var COL={
-    grassA:'#564a6b',grassB:'#4a3f5e',grassDot:'#3b3350',     // violet-grey meadow
-    darkA:'#3a3250',darkB:'#322a46',darkDot:'#272038',        // dark violet floor
-    sand:'#a394b4',sandB:'#9686a8',sandDot:'#7e6e92',         // lavender-grey
-    rock:'#6a6474',rockB:'#5c5666',rockDot:'#4a4454',         // rocky path
-    flowerBase:'#54486a',
-    water:'#46386e',waterB:'#3a2e5c',                          // amethyst water
-    treeDark:'#2a1c42',treeMid:'#3a2858',treeLite:'#5a3f82',trunk:'#3e2a4a',
-    pineDark:'#1f1638',pineMid:'#2c2050',
-    snow:'#b6acc6',snowB:'#a298b8'
-  };
 
   // tile codes: 0 grass,1 dark grass,2 tree,3 water,4 sand,5 rock path,6 flower,7 pine(block),8 snow,9 rock(block)
   var map=[], biome=[];
@@ -438,27 +427,11 @@
   // a worn piece absorbs an incoming wound, then shatters
   function breakArmor(){var order=['helm','arms','legs','chest'];for(var i=0;i<order.length;i++){if(S.armor[order[i]]){S.armor[order[i]]=false;return order[i];}}return null;}
   var dayTimer=0;
-  var DAY_MS=28000;        // a "day" of real play (slightly longer to breathe)
-  var HUNGER_RATE=1.5;     // eased a lot — hunger should nag, not dominate; leaves room for conflict & betrayal
   var darkness=0;          // bright violet day1 → near-black
-  function diff(){return 1 + (S.day-1)*0.12 + S.killed*0.008;} // gentler scaling; skill should matter more than the clock
+  function diff(){return DIFF.base + (S.day-1)*DIFF.perDay + S.killed*DIFF.perKill;} // gentler scaling; skill should matter more than the clock
 
   // PLAYER — fragile. One body, one wooden sword.
   // hp is a thin "stagger" buffer; a clean hit (or any backstab) can drop you instantly.
-  var MAXHP=4;             // four wounds before you fall — a backstab (2 wounds) twice, or 4 face-hits
-  // ---- WEAPONS: found on the ground, picked up while foraging ----
-  //  reach = swing distance · cd = cooldown(ms) · arc = hit half-angle(rad) · color for the sprite
-  var WEAPONS={
-    fist:     {name:'맨손',   reach:34, cd:340, arc:0.7, col:null,      blade:'#e0b088', len:0,  label:'주먹'},
-    stick:    {name:'나무 막대',reach:46, cd:330, arc:0.8, col:'#8a6a3a', blade:'#a47a44', len:16, label:'막대기'},
-    rock:     {name:'돌멩이', reach:38, cd:420, arc:0.9, col:'#8a8088', blade:'#9a9098', len:8,  label:'돌'},
-    dagger:   {name:'단검',   reach:40, cd:230, arc:0.7, col:'#6a4a24', blade:'#d6d9dd', len:14, label:'단검'},
-    woodsword:{name:'나무검', reach:52, cd:300, arc:0.85,col:'#7a5a2a', blade:'#caa86a', len:22, label:'나무검'},
-    sword:    {name:'강철검', reach:56, cd:300, arc:0.9, col:'#6a4a24', blade:'#dfe4ea', len:26, label:'검'},
-    spear:    {name:'창',     reach:72, cd:420, arc:0.55,col:'#8a6a3a', blade:'#d6d9dd', len:34, label:'창', style:'thrust'},
-    axe:      {name:'도끼',   reach:50, cd:480, arc:1.2, col:'#5a3a1a', blade:'#cfd2d6', len:20, label:'도끼'}
-  };
-  var WEAPON_ORDER=['stick','rock','dagger','woodsword','sword','spear','axe'];
   var player={x:MW/2,y:MH/2,facing:'down',walk:0,atk:0,atkCool:0,hurt:0,inv:0,dashCd:0,dashT:0,dvx:0,dvy:0,weapon:'fist'};
   function curWeapon(){return WEAPONS[player.weapon]||WEAPONS.fist;}
   var weapons=[];  // dropped weapon pickups on the ground: {x,y,kind,bob}
@@ -471,11 +444,8 @@
       kind=pool[Math.floor(Math.random()*pool.length)];}
     weapons.push({x:f.x,y:f.y,kind:kind,bob:Math.random()*6});}
   // 현재 미사용 — 무기/방어구는 조합으로만 획득
-  function ensureWeapons(){var min=S.day<=2?5:3;while(weapons.length<min)addWeaponDrop();}
+  function ensureWeapons(){var min=S.day<=2?SPAWN.weaponsEarlyMin:SPAWN.weaponsLateMin;while(weapons.length<min)addWeaponDrop();}
 
-  // ---- ARMOR pickups scattered in the field (rarer than weapons) ----
-  var ARMOR_KINDS=['helm','chest','arms','legs'];
-  var ARMOR_NAME={helm:'투구',chest:'흉갑',arms:'팔보호대',legs:'각반'};
   var armorDrops=[]; // {x,y,piece,bob}
   var companions=[]; // allies that follow & fight for you
   var activeQuest=null; // current NPC mission
@@ -484,9 +454,9 @@
   // 현재 미사용 — 무기/방어구는 조합으로만 획득
   function ensureArmor(){
     // a little armour lies around during the peaceful foraging days; scarce later
-    var min=S.day<=1?3:S.day<=2?2:1;
+    var min=S.day<=1?SPAWN.armorEarlyMin:S.day<=2?SPAWN.armorMidMin:SPAWN.armorLateMin;
     while(armorDrops.length<min)addArmorDrop();}
-  function moveSpeed(){return 2.7 - S.wounds*0.45;}            // NASTY: wounds slow you
+  function moveSpeed(){return MOVE.base - S.wounds*MOVE.woundPenalty;}  // NASTY: wounds slow you
   function clamp(){if(S.hunger>100)S.hunger=100;if(S.hunger<0)S.hunger=0;if(S.fear>10)S.fear=10;if(S.fear<0)S.fear=0;if(S.wounds<0)S.wounds=0;}
 
 
@@ -534,129 +504,16 @@
     if(S.day<=4) return "\n요즘은 다들 예민해졌다. 그 사람 눈빛에도 경계가 묻어난다.";
     return "\n며칠 사이 사람이 변했다. 굶주림이 모두를 다른 사람으로 만들고 있다.";
   }
-  var STORIES={
-    child:{name:"꼬마 승객 루나",lvl:1,c:'child',
-      intro:"우주선에서 네 옆자리에 앉았던 꼬마, 루나다. 너를 알아보고 달려온다.\n\"오빠/언니다! 살아 있었구나! 나… 혼자였어.\"",
-      nodes:{start:{choices:[
-        {label:"\"이제 같이 다니자.\" 손을 잡는다",m:'화친',line:"흩어진 사람들이 다시 뭉치는 순간.",eff:function(){S.rep+=3;S.fear-=1;return{ok:1,t:"루나가 환하게 웃으며 따라온다. 혼자가 아니라는 게 이렇게 든든하다. (마음이 놓인다)",foe:-9,next:'together'};}},
-        {label:"\"먹을 거 있어? 좀 나눠.\"",m:'경쟁',line:"배고픔이 먼저 말을 한다.",eff:function(){if(S.day<=3){S.rep-=1;return{ok:0,t:"루나가 머뭇거리며 주머니의 사탕 하나를 꺼낸다. \"…이거밖에 없는데.\" 괜히 미안해진다.",foe:-9,next:'together'};}S.hunger+=8;S.rep-=2;return{ok:1,t:"겁먹은 루나가 비상식량을 건넨다. 받아 들고 나니 마음이 영 무겁다. (먹을 것 +1)",foe:-9};}},
-        {label:"\"위험해. 너는 저리 가 있어.\"",m:'불신',line:"지켜주려는 마음일까, 떠넘기는 걸까.",eff:function(){return{ok:1,t:"루나가 시무룩하게 물러선다. \"…알겠어.\" 등 뒤가 괜히 신경 쓰인다.",foe:-9};}}
-      ]},
-      together:{text:"루나가 종알종알 떠든다. \"우리 말고 다른 사람들도 찾을 수 있을까? 다 같이 모이면 안 무섭잖아.\"",choices:[
-        {label:"\"그래, 다 같이 모여서 살자.\"",m:'질서',line:"함께 모이면 규칙도 생긴다 — 정치의 씨앗.",eff:function(){S.rep+=2;S.fear-=2;return{ok:1,t:"루나가 신나서 박수 친다. 모이면 무섭지 않다. 그게 시작이다. (마음이 든든)",foe:-9};}},
-        {label:"\"일단 너랑 나, 둘이면 충분해.\"",m:'명예',line:"작은 무리부터.",eff:function(){S.rep+=1;return{ok:1,t:"둘이 손을 꼭 잡고 걷는다. 루나가 이제부터 함께다닌다! (든든)",foe:-9,recruit:1};}}
-      ]}}},
 
-    medic:{name:"의무관 하나",lvl:6,c:'medic',
-      intro:"우주선 의무실에서 봤던 하나가 구급상자를 안고 있다.\n\"다친 데 없어? 보자… 여기선 내가 도울 수 있는 게 이거뿐이라."+moodTail()+"\"",
-      nodes:{start:{choices:[
-        {label:"\"좀 봐줘.\" 상처를 보인다",m:'화친',line:"약한 모습을 보여도 되는 사람이 있다.",eff:function(){if(S.wounds>0)S.wounds--;S.rep+=1;return{ok:1,t:"하나가 상처를 꼼꼼히 싸매준다. 한결 가뿐하다. (목숨 회복)",foe:-6,next:'blessed'};}},
-        {label:"\"그 약, 나 다 줘.\" 손을 뻗는다",m:'경쟁',line:"필요하면 빼앗기도 한다.",eff:function(){if(S.day<=3){S.rep-=1;return{ok:0,t:"하나가 황당해한다. \"…야, 같이 쓰는 거잖아.\" 머쓱하게 손을 거둔다.",foe:-7};}S.hunger+=16;S.rep-=2;return{ok:1,t:"겁먹은 하나가 구급상자를 통째로 내준다. 받고 나니 영 개운치 않다. (먹을 것 +2, 목숨 회복)",foe:-9,next:'cursed'};}},
-        {label:"\"독 든 거 아냐?\" 의심하며 물러선다",m:'불신',line:"믿어도 될 사람조차 의심하게 된다.",eff:function(){S.fear+=1;return{ok:1,t:"고개를 젓고 지나쳤다. 하나가 서운한 눈으로 본다.",foe:-9};}}
-      ]},
-      blessed:{text:"하나가 작은 약 꾸러미를 쥐여준다. \"급할 때 써. 그리고… 다른 사람들한테도 나 여기 있다고 좀 전해줘.\"",choices:[
-        {label:"\"꼭 전할게. 고마워.\"",m:'명예',line:"착한 일은 좋은 소문으로 돌아온다.",eff:function(){S.rep+=2;return{ok:1,t:"약을 챙기고 하나의 이야기를 곳곳에 전했다. (목숨 회복)",foe:-9};}},
-        {label:"약만 챙기고 말없이 간다",m:'경쟁',line:"받기만 하는 사람.",eff:function(){S.rep-=1;return{ok:1,t:"약만 챙겨 떠났다. (목숨 회복)",foe:-9};}}
-      ]},
-      cursed:{text:"상자를 빼앗긴 하나가 소리친다. \"너 같은 애한테 잘해줬다니! 다른 사람들한테 다 말할 거야!\"",choices:[
-        {label:"\"조용히 해.\" 위협한다",m:'불신',line:"누르면 미움은 더 커진다.",eff:function(){S.fear+=2;S.rep-=1;return{ok:0,t:"하나가 달아나며 더 크게 외친다. 네 나쁜 소문이 퍼진다.",foe:-9};}},
-        {label:"약 절반을 돌려준다",m:'화친',line:"돌려주는 게 화해의 시작.",eff:function(){S.hunger-=8;S.rep+=1;return{ok:1,t:"절반을 돌려주자 하나가 한숨을 쉰다. \"…너도 무서웠던 거지.\"",foe:-9};}}
-      ]}}},
-
-    smith:{name:"정비사 도진",lvl:9,c:'smith',
-      intro:"우주선 정비사 도진이 잔해에서 쇳조각을 두드려 뭔가를 만들고 있다.\n\"오, 살아있었네! 이거 봐, 부서진 선체로 방패를 만들었어."+moodTail()+"\"",
-      nodes:{start:{choices:[
-        {label:"\"먹을 거랑 바꾸자.\" 거래한다",m:'질서',line:"주고받는 거래도 평화의 한 방법.",eff:function(){if(S.hunger<12)return{ok:0,t:"먹을 게 모자라 도진이 어깨를 으쓱한다. \"다음에 와.\"",foe:0};S.hunger-=16;if(S.wounds>0)S.wounds--;S.rep+=1;return{ok:1,t:"튼튼한 보호구를 받았다. 도진이 씩 웃는다. (먹을 것 -2, 목숨 회복)",foe:-9};}},
-        {label:"\"그거 그냥 내놔.\" 빼앗으려 한다",m:'경쟁',line:"센 사람 것도 빼앗을 수 있다.",eff:function(){if(S.day<=3){S.rep-=1;return{ok:0,t:"도진이 어이없어한다. \"…우리 같은 배 탔잖아. 왜 이래?\" 괜히 미안해진다.",foe:-7};}var ok=Math.random()<0.4;if(ok){S.rep-=2;return{ok:1,t:"방패를 낚아채 달아났다. 망치가 등 뒤를 스친다. (목숨 회복)",foe:-7};}if(S.wounds<MAXHP)S.wounds++;return{ok:0,t:"도진의 망치가 어깨를 때린다. (큰 상처)",foe:-1,next:'crushed'};}},
-        {label:"\"같이 만들래?\" 손을 보탠다",m:'화친',line:"기술 가진 사람끼리 힘을 합치기.",eff:function(){var ok=S.rep>=-1;if(ok){S.rep+=2;S.fear-=1;return{ok:1,t:"풀무질을 도우니 도진이 마음을 연다. 둘만의 작업장이 생겼다! (목숨 회복)",foe:-8};}return{ok:0,t:"\"소문 안 좋은 너랑은 좀…\" 도진이 거리를 둔다. (작은 상처)",foe:0};}}
-      ]},
-      crushed:{text:"쓰러진 너에게 도진이 망치를 들고 다가온다. \"…왜 이렇게까지 하냐, 우리.\"",choices:[
-        {label:"가진 걸 내주고 사과한다",m:'굴복',line:"살려고 자존심을 내린다.",eff:function(){S.hunger-=24;S.rep+=1;return{ok:1,t:"먹을 걸 내주고 사과하자 도진이 칼 대신 한숨을 내쉰다. (먹을 것 -3)",foe:0};}},
-        {label:"흙을 뿌리고 달아난다",m:'불신',line:"도망도 살아남는 방법.",eff:function(){var ok=Math.random()<0.55;if(ok){return{ok:1,t:"눈을 가리고 달아났다.",foe:-9};}if(S.wounds<MAXHP)S.wounds++;return{ok:0,t:"붙잡혀 한 대 더 맞았다. (큰 상처)",foe:0};}}
-      ]}}},
-
-    archer:{name:"정찰병 시아",lvl:8,c:'archer',
-      intro:S.day<=3
-        ?"높은 바위 위에서 시아가 손을 흔든다. \"여기! 위에서 보니까 사방이 다 보여. 도와줄까?\""
-        :"바위 위 시아가 활을 반쯤 겨눈 채 너를 살핀다.\n\"…멈춰. 요즘은 아는 얼굴도 함부로 못 믿어. 적인지 아닌지 말해 봐.\"",
-      nodes:{start:{choices:[
-        {label:"\"나야, 같은 편이야.\" 두 손을 든다",m:'화친',line:"무서운 상대에게 먼저 믿음을 내미는 도박.",eff:function(){var ok=Math.random()<(0.6+S.rep*0.04-(S.day>2?0.15:0));if(ok){S.rep+=2;S.fear-=1;return{ok:1,t:"시아가 활을 내린다. \"…그래, 너구나. 미안. 둘이면 더 안전하겠지.\"",foe:-7,next:'ally'};}if(S.wounds<MAXHP)S.wounds++;return{ok:0,t:"시아가 못 믿는다. 경고 화살이 어깨를 스친다. (작은 상처)",foe:-1};}},
-        {label:"바위 뒤로 굴러 숨는다",m:'불신',line:"먼저 살고 본다.",eff:function(){var ok=Math.random()<0.6;if(ok){return{ok:1,t:"화살이 빗나갔다. 거리를 벌려 빠져나왔다.",foe:-9};}if(S.wounds<MAXHP)S.wounds++;return{ok:0,t:"숨는 게 늦었다. 화살이 등에 박힌다. (큰 상처)",foe:0};}},
-        {label:"먹을 걸 던져 시선을 끈다",m:'경쟁',line:"상대의 허기를 이용한다.",eff:function(){S.hunger-=16;var ok=Math.random()<0.7;if(ok){S.rep-=1;return{ok:1,t:"시아가 먹을 걸 줍는 틈에 빠져나왔다. (먹을 것 -2)",foe:-9};}return{ok:0,t:"시아는 미끼를 무시하고 쏜다. (작은 상처, 먹을 것 -2)",foe:0};}}
-      ]},
-      ally:{text:"시아가 바위에서 내려온다. \"내가 위에서 망볼게. 넌 아래를 맡아. 우리 둘이면 사방을 다 보잖아.\"",choices:[
-        {label:"\"좋아, 역할을 나누자.\"",m:'질서',line:"역할을 나누면 살 확률이 오른다.",eff:function(){S.rep+=1;S.fear-=1;return{ok:1,t:"믿음직한 눈 하나가 늘었다. 시아가 함께 싸워준다! (목숨 회복)",foe:-9,recruit:1};}},
-        {label:"활만 빼앗아 달아난다",m:'경쟁',line:"믿어준 순간을 배신으로 갚는다.",eff:function(){S.rep-=3;S.hunger+=8;return{ok:1,t:"시아의 활을 낚아채 달아났다. 등 뒤로 배신감 가득한 외침. (먹을 것 +1)",foe:-9};}}
-      ]}}},
-
-    farmer:{name:"겁먹은 승객 보라",lvl:4,c:'farmer',
-      intro:S.day<=3
-        ?"보라가 비상식량 상자를 끌어안고 두리번거린다. \"이거… 우리 다 같이 먹어야 하는 거 맞지? 어떻게 나눌까?\""
-        :"보라가 식량 상자를 꼭 끌어안고 떤다. 다리를 다쳤는지 잘 움직이지 못한다.\n상자 안엔 며칠치 먹을 것이 가득하다."+moodTail(),
-      nodes:{start:{choices:[
-        {label:"\"이리 내놔.\" 상자를 빼앗는다",m:'경쟁',line:"약한 사람 것을 빼앗아도 막을 사람이 없다.",eff:function(){S.hunger+=40;S.rep-=2;return{ok:1,t:"상자를 통째로 챙겼다. 보라의 흐느낌이 등 뒤를 따라온다. (먹을 것 +5)",foe:-9,next:'witnessed'};}},
-        {label:"멀찍이 돌아서 지나간다",m:'불신',line:"엮이지 않는 게 안전하다.",eff:function(){S.fear+=1;return{ok:1,t:"가까이 가지 않고 돌아갔다.",foe:-9};}},
-        {label:"\"같이 나눠 먹자.\" 곁에 앉는다",m:'화친',line:"나누는 것이 평화의 출발.",eff:function(){S.hunger+=8;S.rep+=2;return{ok:1,t:"보라가 떨리는 손으로 먹을 걸 나눠준다. \"고마워… 혼자선 너무 무서웠어.\" (먹을 것 +1, 목숨 회복)",foe:-5,next:'grateful'};}}
-      ]},
-      witnessed:{text:"상자를 메고 돌아서는데, 그 광경을 본 사람이 다가온다. \"약한 애 걸 빼앗네? 너도 똑같이 당해 봐.\"",choices:[
-        {label:"\"덤빌 거면 덤벼.\"",m:'경쟁',line:"나쁜 소문은 모두를 적으로 만든다.",eff:function(){var ok=Math.random()<0.45;if(ok){return{ok:1,t:"간신히 쫓아냈다. (작은 상처)",foe:-9};}if(S.wounds<MAXHP)S.wounds++;S.hunger-=16;return{ok:0,t:"상자를 도로 빼앗기고 다쳤다. (큰 상처, 먹을 것 -2)",foe:0};}},
-        {label:"먹을 것 일부를 떼어 건넨다",m:'화친',line:"돌려주는 게 화해의 시작.",eff:function(){S.hunger-=16;S.rep+=1;return{ok:1,t:"몇 개 떼어 주자 상대가 물러난다. (먹을 것 -2)",foe:-9};}}
-      ]},
-      grateful:{text:"기운을 차린 보라가 손그림 지도를 꺼낸다. \"혼자 다니다 그렸어. 안전한 데가 표시돼 있어. 같이 보자.\"",choices:[
-        {label:"\"고마워. 같이 다니자.\"",m:'질서',line:"함께 다니면 외로움도 위험도 준다.",eff:function(){S.hunger+=16;S.fear-=2;return{ok:1,t:"깨끗한 물과 쉴 곳이 표시돼 있다. 보라가 함께 다니기로 했다! (먹을 것 +2)",foe:-9,recruit:1};}},
-        {label:"\"마음만 받을게.\"",m:'명예',line:"신세 지기 싫은 마음.",eff:function(){S.rep+=1;return{ok:1,t:"고맙다고만 하고 홀로 떠났다.",foe:-9};}}
-      ]}}},
-
-    sleeper:{name:"잠든 승객",lvl:5,c:'sleeper',
-      intro:"한 승객이 빵빵한 식량 가방을 베고 풀밭에 곤히 잠들어 있다.\n주위엔 아무도 없다. 정말, 아무도."+moodTail(),
-      nodes:{start:{choices:[
-        {label:"발소리를 죽여 가방을 빼낸다",m:'경쟁',line:"아무도 안 볼 때, 사람은 어떻게 할까?",eff:function(){var ok=Math.random()<0.7;if(ok){S.hunger+=32;S.rep-=1;return{ok:1,t:"가방이 스르륵 빠져나왔다. (먹을 것 +4)",foe:-9};}return{ok:0,t:"끈이 걸렸다. \"도둑이야!\" 잠이 깬다. (작은 상처)",foe:-2,next:'caught'};}},
-        {label:"흔들어 깨워 사정을 말한다",m:'명예',line:"몰래 뺏는 건 떳떳하지 못하다.",eff:function(){var ok=S.rep>=-1;if(ok){S.hunger+=16;S.rep+=2;return{ok:1,t:"\"같은 배 탔던 사이잖아.\" 그가 먹을 걸 나눠준다. (먹을 것 +2)",foe:-6};}return{ok:0,t:"강도로 알고 먼저 손이 나간다. (작은 상처)",foe:-1,next:'caught'};}},
-        {label:"깨우지 않고 조용히 지나간다",m:'화친',line:"아무도 안 봐도 바른 길을 고른다.",eff:function(){S.rep+=1;return{ok:1,t:"건드리지 않고 지나갔다.",foe:-9};}}
-      ]},
-      caught:{text:"잠이 깬 승객이 떨며 막대를 겨눈다. \"이젠… 같은 배 탔던 사람도 못 믿겠어.\"",choices:[
-        {label:"가방을 내려놓고 물러선다",m:'굴복',line:"목숨이 물건보다 중요하다.",eff:function(){S.hunger-=8;return{ok:1,t:"가방을 내려놓고 뒤로 물러났다. (먹을 것 -1)",foe:0};}},
-        {label:"맞붙는다",m:'경쟁',line:"한 번 시작된 싸움은 끝을 본다.",eff:function(){var ok=Math.random()<0.5;if(ok){S.hunger+=24;return{ok:1,t:"몸싸움 끝에 가방을 빼앗았다. (먹을 것 +3, 작은 상처)",foe:-9};}if(S.wounds<MAXHP)S.wounds++;return{ok:0,t:"상대가 더 독했다. (큰 상처)",foe:0};}}
-      ]}}},
-
-    chief:{name:"무리를 모은 강윤",lvl:14,c:'chief',
-      intro:S.day<=3
-        ?"강윤이 사람들을 불러 모으고 있다. \"이봐, 너도 와! 흩어져 있으면 다 죽어. 모여야 산다고!\""
-        :"덩치 큰 사내 둘을 거느린 강윤이 길을 막는다.\n\"이 구역은 우리 무리 거다. 함께하든가, 값을 치르고 지나가든가.\"",
-      nodes:{start:{choices:[
-        {label:"\"무리에 들어갈게.\"",m:'질서',line:"보호를 받는 대신 규칙을 따른다 — 작은 국가.",eff:function(){S.fear-=2;S.rep-=1;return{ok:1,t:"무리에 들어갔다. 혼자보다 훨씬 안전하다. 대신 강윤의 규칙을 따라야 한다. (목숨 회복)",foe:-9,next:'inside'};}},
-        {label:"\"너부터 이겨야겠는데.\" 맞선다",m:'명예',line:"무리 앞에서 물러서면 끝장이다.",eff:function(){var ok=(S.rep+(MAXHP-S.wounds)*4)>=8;if(ok){S.rep+=4;return{ok:1,t:"강윤을 메다꽂자, 부하들이 너를 다시 본다. (사람들이 따른다)",foe:-10,next:'crowned'};}if(S.wounds<MAXHP)S.wounds++;return{ok:0,t:"셋이 한꺼번에 덤빈다. (큰 상처)",foe:-1,next:'beaten'};}},
-        {label:"부하들에게 \"강윤이 너희한테 뭘 해줬는데?\"",m:'화친',line:"힘은 사람들의 동의 위에 선다.",eff:function(){var ok=S.rep>=1;if(ok){S.rep+=3;return{ok:1,t:"부하 둘이 고개를 끄덕이며 네 쪽으로 온다. (사람들이 따른다)",foe:-8,next:'crowned'};}if(S.wounds<MAXHP)S.wounds++;return{ok:0,t:"부하들이 강윤에게 일러바친다. 매가 쏟아진다. (큰 상처)",foe:0,next:'beaten'};}}
-      ]},
-      inside:{text:"강윤이 말한다. \"규칙은 하나야. 우리끼린 안 뺏는다. 어기면 쫓아낸다. …어때, 마음에 들어?\"",choices:[
-        {label:"\"좋은 규칙이네.\"",m:'질서',line:"규칙이 무리 안에 평화를 만든다.",eff:function(){S.rep+=2;S.fear-=2;return{ok:1,t:"규칙 한 줄 덕에 무리 안은 평화롭다. 밖과는 완전히 다르다. (마음이 든든)",foe:-9};}},
-        {label:"\"근데 규칙 어기면 누가 벌줘?\"",m:'명예',line:"규칙을 지킬 '힘'이 있어야 규칙이 산다.",eff:function(){S.rep+=1;return{ok:1,t:"강윤이 씩 웃는다. \"그래서 내가 있는 거지. 누군가는 규칙을 지키게 만들어야 하니까.\" 묘하게 고개가 끄덕여진다.",foe:-9};}}
-      ]},
-      crowned:{text:"무리가 너를 본다. \"이제 네가 대장이야. 저쪽 무리 걸 털러 갈까?\"",choices:[
-        {label:"\"털어. 가진 거 전부.\"",m:'경쟁',line:"막아줄 게 없으면 힘은 더 큰 폭력이 된다.",eff:function(){S.hunger+=32;S.fear+=1;S.rep-=1;return{ok:1,t:"다른 무리를 털어 가방을 채웠다. 그만큼 적도 늘었다. (먹을 것 +4)",foe:-10};}},
-        {label:"\"우리끼린 안 뺏는다. 규칙이야.\"",m:'질서',line:"힘을 모아 평화를 지키는 작은 우두머리.",eff:function(){S.rep+=2;S.fear-=2;return{ok:1,t:"규칙 한 줄에 무리 안에 평화가 깃든다. (마음이 크게 든든)",foe:-10};}}
-      ]},
-      beaten:{text:"엎어진 너를 강윤이 내려다본다. \"그래도 안 굽혀?\"",choices:[
-        {label:"가진 걸 내주고 물러선다",m:'굴복',line:"살려고 자존심을 내린다.",eff:function(){S.hunger-=24;return{ok:1,t:"먹을 걸 내주고 풀려났다. (먹을 것 -3)",foe:0};}},
-        {label:"\"안 굽혀.\"",m:'명예',line:"죽기보다 굽히는 게 싫다.",eff:function(){if(S.wounds<MAXHP)S.wounds++;S.rep+=2;return{ok:0,t:"끝까지 안 굽히는 너에 부하들조차 술렁인다. (큰 상처)",foe:-3};}}
-      ]}}},
-
-    deserter:{name:"무너진 승객",lvl:12,c:'deserter',
-      intro:"한 승객이 떨리는 손으로 날카로운 쇳조각을 쥐고 있다. 눈이 텅 비어 보인다.\n\"…다가오지 마. 다들 날 노린다고. 너도… 너도 그런 거지?\""+moodTail(),
-      nodes:{start:{choices:[
-        {label:"\"진정해. 나도 그냥 살려는 사람이야.\"",m:'화친',line:"같은 처지가 사람을 뭉치게 한다.",eff:function(){var ok=Math.random()<(0.45+S.rep*0.04);if(ok){S.rep+=2;S.fear-=1;return{ok:1,t:"그가 쇳조각을 천천히 내린다. \"…미안. 너무 무서워서.\" (목숨 회복)",foe:-7};}if(S.wounds<MAXHP)S.wounds++;return{ok:0,t:"의심을 못 거둔다. 먼저 쇳조각을 휘두른다. (작은 상처)",foe:-1};}},
-        {label:"무서우니 먼저 친다",m:'불신',line:"먼저 안 치면 내가 당한다 — 불신의 악순환.",eff:function(){S.fear+=2;var ok=Math.random()<0.45;if(ok){S.hunger+=16;S.rep-=1;return{ok:1,t:"허를 찔러 그의 짐을 빼앗았다. 마음이 무겁다. (먹을 것 +2)",foe:-6};}if(S.wounds<MAXHP)S.wounds++;return{ok:0,t:"궁지에 몰린 사람의 반격은 거칠다. 깊이 베였다. (큰 상처)",foe:0};}},
-        {label:"먹을 걸 내밀며 천천히 다가간다",m:'명예',line:"두려움은 친절로 풀린다.",eff:function(){if(S.hunger<4)return{ok:0,t:"내밀 먹을 게 없다. 그가 더 사납게 경계한다.",foe:-1};S.hunger-=8;var ok=Math.random()<0.6;if(ok){S.rep+=3;S.fear-=2;return{ok:1,t:"먹을 걸 받아 든 그가 울먹인다. \"…고마워. 사람이 그리웠어.\" (먹을 것 -1)",foe:-8};}return{ok:0,t:"손을 뻗는 순간 겁에 질려 쳐낸다. (작은 상처, 먹을 것 -1)",foe:-1};}}
-      ]}}}
-  };
-
+  // Built once at boot. The eff() bodies close over this exact S object, which is
+  // why reset() clears S in place instead of reassigning it.
+  var STORIES=createStories(S,moodTail);
   var STORY_KEYS=Object.keys(STORIES);
   var namesPool=["지호","수아","민준","서연","하준","예린","도윤","채원","시우","유나","건우","소율","태경","나윤"];
 
   // ===== NPC QUESTS — wanderers who ask favours (and may betray you) =====
   // each quest: type, target count, reward, flavour. Betrayal chance applies on accept & on turn-in.
   var QUEST_GIVERS=['medic','smith','farmer','archer','child'];
-  var QUEST_NAMES={child:'꼬마 루나',medic:'의무관 하나',smith:'정비사 도진',farmer:'승객 보라',archer:'정찰병 시아',sleeper:'잠든 승객',chief:'강윤',deserter:'무너진 승객'};
   function makeQuest(){
     // Weighted toward 'ally' quests on purpose: the core lesson is that a promise between
     // equals — with no power above them to enforce it — is fragile. Kids need to make MANY
@@ -716,14 +573,6 @@
       live++;
     }
   }
-  // ===== FOOD VARIETY: several kinds, each with its own look, rarity & nourishment =====
-  var FOOD_TYPES={
-    berry: {name:'산딸기', heal:22, weight:34, col:['#d8487a','#e85b8a','#c03868']},
-    apple: {name:'들과일', heal:34, weight:22, col:['#e0503a','#f06a4a','#c0402a']},
-    root:  {name:'뿌리채소',heal:30, weight:20, col:['#e0a24a','#f0b85a','#c08838']},
-    honey: {name:'벌집',   heal:48, weight:9,  col:['#f0c030','#ffd850','#d8a020']},
-    fish:  {name:'물고기', heal:44, weight:15, col:['#8ab8d8','#a8d0e8','#6a98b8']}
-  };
   var FOOD_KEYS=Object.keys(FOOD_TYPES);
   function rollFoodKind(nearWater){
     // fish only appears when a water tile is nearby; otherwise pick weighted among the rest
@@ -736,24 +585,19 @@
   function waterNear(x,y){var tx=Math.floor(x/TILE),ty=Math.floor(y/TILE);
     for(var dy=-1;dy<=1;dy++)for(var dx=-1;dx<=1;dx++){if(tileAt(tx+dx,ty+dy)===3)return true;}return false;}
   function spawnFood(n){for(var i=0;i<n;i++){var f=freeTile();var kind=rollFoodKind(waterNear(f.x,f.y));foods.push({x:f.x,y:f.y,sway:Math.random()*6,kind:kind});}}
-  function ensureFood(){while(foods.length<11)spawnFood(1);}
+  function ensureFood(){while(foods.length<SPAWN.foodMin)spawnFood(1);}
 
   // ===== CRITTERS — peaceful wildlife you can chase and play with. They exist purely for
   // the JOY of the early, lawless days: no goal, no danger, just the freedom to roam and
   // frolic. As the world darkens (day 4+) they grow scarce, quietly signalling the loss of
   // that innocent freedom. =====
   var critters=[];
-  var CRITTER_TYPES={
-    butterfly:{name:'나비',   fly:true,  flee:34, spd:0.9, r:5},
-    rabbit:   {name:'토끼',   fly:false, flee:60, spd:1.7, r:7},
-    firefly:  {name:'반딧불', fly:true,  flee:26, spd:0.7, r:4}
-  };
   function spawnCritter(kind){var f=freeTile();var T=CRITTER_TYPES[kind];
     critters.push({x:f.x,y:f.y,kind:kind,dir:Math.random()*6.28,t:0,hop:Math.random()*6,
       vx:0,vy:0,bob:Math.random()*6, petted:false});}
   function ensureCritters(){
     // lots of life on peaceful days; almost none once it turns cruel
-    var want = S.day<=3 ? 7 : (S.day<=4 ? 3 : 1);
+    var want = S.day<=3 ? SPAWN.crittersEarly : (S.day<=4 ? SPAWN.crittersMid : SPAWN.crittersLate);
     while(critters.length<want){
       var pool = S.day<=3 ? ['butterfly','rabbit','firefly'] : ['butterfly'];
       spawnCritter(pool[Math.floor(Math.random()*pool.length)]);
@@ -820,10 +664,7 @@
   // place a resource somewhere on the map, never right on top of the player
   function addResource(kind){var tries=0,f;do{f=freeTile();tries++;}while(Math.hypot(f.x-player.x,f.y-player.y)<160&&tries<40);resources.push({x:f.x,y:f.y,kind:kind,bob:Math.random()*6});}
   function spawnResources(){resources=[];
-    for(var i=0;i<10;i++)addResource('wood');
-    for(var i=0;i<6;i++)addResource('stone');
-    for(var i=0;i<5;i++)addResource('mushroom');
-    for(var i=0;i<5;i++)addResource('fiber');
+    for(var k in SPAWN.resInitial){for(var i=0;i<SPAWN.resInitial[k];i++)addResource(k);}
   }
   // Slow, capped replenishment. Instead of instantly refilling to a target every frame
   // (which made a new node pop right after you grabbed one), we add at most ONE node
@@ -831,57 +672,21 @@
   function ensureResources(){
     var now=performance.now();
     if(now<resRespawnAt) return;
-    var caps = (S.day<=3)
-      ? {wood:10, stone:6, mushroom:5, fiber:5}   // day 1-3: rich, build freely
-      : {wood:4,  stone:3, mushroom:3, fiber:2};  // day 4+: scarcer, danger has arrived
+    var caps = (S.day<=3) ? SPAWN.resCapsEarly : SPAWN.resCapsLate;
     var c={wood:0,stone:0,mushroom:0,fiber:0};
     for(var i=0;i<resources.length;i++){c[resources[i].kind]=(c[resources[i].kind]||0)+1;}
     // find the material furthest below its cap and add just one
     var pick=null,worst=0;
     for(var k in caps){var deficit=caps[k]-(c[k]||0);if(deficit>worst){worst=deficit;pick=k;}}
-    if(pick){ addResource(pick); resRespawnAt = now + 2600; } // one node every ~2.6s
+    if(pick){ addResource(pick); resRespawnAt = now + SPAWN.resRespawnMs; }
   }
-  // ---- enemy archetypes: EQUAL in lethality, different in behaviour ----
-  //  Every one of them can kill you in a single clean strike. You can kill any of them
-  //  the same way — especially from behind. That is the "equality that breeds fear."
-  //  prowler: openly hunts you.  lurker: wanders, then ambushes when close.  jackal: fast, comes in packs.
-  var RTYPE={
-    prowler:{name:'굶주린 자', spd:0.92, size:2.0, col:'raider', mark:'☠', sight:140, lunge:26},
-    lurker: {name:'숨어든 자', spd:0.74, size:2.1, col:'ogre',   mark:'◆', sight:88,  lunge:34}, // ambusher: short sight, telegraphed lunge
-    jackal: {name:'떼 지은 자', spd:1.5,  size:1.7, col:'wolf',   mark:'ᘛ', sight:175, lunge:22}
-  };
-  // ===== "STATE OF NATURE" TAUNTS — lines that make the point explicit: here there is no
-  // law, no judge, no punishment, so anyone may do anything to anyone. This is what turns a
-  // plain survival game into an experience of UNLIMITED FREEDOM (and its terror). =====
-  var TAUNTS_ATTACK=[   // shouted when a raider strikes you
-    '여긴 규칙이 없어! 내 맘대로야!',
-    'ㅋㅋ 막을 사람이 아무도 없지!',
-    '누가 날 벌줄 건데? 아무도 없어!',
-    '여기선 힘센 놈이 곧 법이야!',
-    '뺏고 싶으면 뺏는 거지, 뭐가 문제야?',
-    '경찰도, 재판도 없는 곳이잖아!',
-    '착하게 굴어서 뭐 하게? 여긴 그런 거 없어!',
-    '네 것도 이제 내 거야. 말릴 사람 있어?',
-    '여기선 아무나 뭐든 할 수 있어!',
-    '자유란 이런 거야. 마음껏 해도 되는 거!'
-  ];
-  var TAUNTS_BETRAY=[   // shouted by a companion the moment they turn on you
-    '미안, 여긴 약속 같은 거 안 지켜도 돼!',
-    '우리 편? ㅋㅋ 그런 게 어딨어!',
-    '벌 받을 일 없는데 왜 참아?',
-    '네가 방심한 게 잘못이지!'
-  ];
-  function rollType(){var r=Math.random(),d=S.day;
-    var pJackal=Math.max(0.18,0.5-d*0.012);
-    var pLurker=Math.min(0.42,0.12+d*0.02);
-    if(r<pJackal)return'jackal'; if(r<pJackal+pLurker)return'lurker'; return'prowler';}
   function spawnRaiders(n){raiders=[];for(var i=0;i<n;i++)addRaider();}
   function mkRaider(x,y,tk){var T=RTYPE[tk];return {x:x,y:y,dir:Math.random()*6.28,wander:0,
     type:tk,hurt:0,dead:false,deadT:0,facing:'down',walk:0,
     state:'idle',
     atkCd:0,lungeT:0,windup:0,bob:Math.random()*6};}
-  function addRaider(type){var f=freeTile();if(Math.hypot(f.x-player.x,f.y-player.y)<240){f=freeTile();}raiders.push(mkRaider(f.x,f.y,type||rollType()));}
-  function addRaiderAt(x,y,type){raiders.push(mkRaider(x,y,type||rollType()));}
+  function addRaider(type){var f=freeTile();if(Math.hypot(f.x-player.x,f.y-player.y)<240){f=freeTile();}raiders.push(mkRaider(f.x,f.y,type||rollType(S.day)));}
+  function addRaiderAt(x,y,type){raiders.push(mkRaider(x,y,type||rollType(S.day)));}
 
   // PACING: day 1 is pure peaceful foraging. A few enemies trickle in on day 2.
   //         From day 3 the field descends into chaos.
@@ -1080,34 +885,10 @@
     sfxDash();floatText(player.x,player.y-30,label+' 완성','#c79be8');flash(label+'을(를) 만들었다!');}
   function wearArmor(piece,label){S.armor[piece]=true;sfxDash();floatText(player.x,player.y-30,label+' 착용','#aee0ff');
     flash(label+'을(를) 만들어 둘렀다! 칼 한 번을 막아준다. (갑옷 '+armorCount()+'/4)');}
-  var RECIPES=[
-    // ---- structures (build your base) ----
-    {id:'shelter', cat:'집', name:'작은 쉼터', icon:'🏠', cost:{wood:3,fiber:1}, once:true,
-      hint:'가까이 있으면 배고픔이 더 천천히 줄고 상처가 아문다',
-      make:function(){ buildStructure('shelter'); S.built.shelter=true; flash('작은 쉼터를 지었다! 가까이 있으면 안전하고 상처가 아물어.'); }},
-    {id:'campfire', cat:'집', name:'모닥불', icon:'🔥', cost:{wood:2,stone:1}, once:true,
-      hint:'곁에 있으면 배고픔이 조금 천천히 준다',
-      make:function(){ buildStructure('campfire'); S.built.campfire=true; flash('모닥불을 피웠다! 곁에 있으면 배고픔이 조금 천천히 줄어.'); }},
-    // ---- weapons ----
-    {id:'club',      cat:'무기', name:'나무 몽둥이', icon:'🏏', cost:{wood:2},        once:false, hint:'사거리·속도 균형형. 처음 쓰기 좋은 기본 무기.', make:function(){makeWeapon('woodsword','나무 몽둥이');}},
-    {id:'stoneknife',cat:'무기', name:'돌칼',       icon:'🔪', cost:{stone:2,fiber:1},once:false, hint:'사거리는 짧지만 가장 빠르게 연속 공격. 붙어서 싸울 때 강함.', make:function(){makeWeapon('dagger','돌칼');}},
-    {id:'spear',     cat:'무기', name:'돌창',       icon:'🔱', cost:{wood:2,stone:1}, once:false, hint:'가장 길게 뻗어 멀리서 안전하게 공격. 대신 휘두르는 속도가 느림.', make:function(){makeWeapon('spear','돌창');}},
-    {id:'axe',       cat:'무기', name:'돌도끼',     icon:'🪓', cost:{wood:1,stone:2}, once:false, hint:'느리지만 넓게 휘둘러 여러 명을 한 번에. 떼로 몰려올 때 유리.', make:function(){makeWeapon('axe','돌도끼');}},
-    // ---- armor (each piece blocks one hit) ----
-    {id:'a_helm', cat:'갑옷', name:'나무 투구',   icon:'🪖', cost:{wood:2},         once:false, hint:'머리 보호. 칼에 맞을 때 딱 한 번, 상처를 대신 막아준다.', reqPiece:'helm',  make:function(){wearArmor('helm','나무 투구');}},
-    {id:'a_chest',cat:'갑옷', name:'덩굴 갑옷',   icon:'🦺', cost:{fiber:3},        once:false, hint:'몸통 보호. 칼에 맞을 때 딱 한 번, 상처를 대신 막아준다.', reqPiece:'chest', make:function(){wearArmor('chest','덩굴 갑옷');}},
-    {id:'a_arms', cat:'갑옷', name:'덩굴 팔보호대',icon:'💪', cost:{fiber:2},        once:false, hint:'팔 보호. 칼에 맞을 때 딱 한 번, 상처를 대신 막아준다.', reqPiece:'arms',  make:function(){wearArmor('arms','팔보호대');}},
-    {id:'a_legs', cat:'갑옷', name:'나무 각반',   icon:'🦵', cost:{wood:1,fiber:1}, once:false, hint:'다리 보호. 칼에 맞을 때 딱 한 번, 상처를 대신 막아준다.', reqPiece:'legs',  make:function(){wearArmor('legs','나무 각반');}},
-    // ---- food ----
-    {id:'stew', cat:'음식', name:'버섯 스튜', icon:'🍲', cost:{mushroom:2}, once:false, hint:'배고픔을 크게 회복(+45). 버섯 2개면 완성.',
-      make:function(){ S.hunger=Math.min(100,S.hunger+45); clamp(); sfxEat(); floatText(player.x,player.y-30,'+배부름','#9affc0'); flash('버섯 스튜를 끓여 먹었다! 배가 든든해.'); }},
-    {id:'skewer', cat:'음식', name:'버섯 꼬치', icon:'🍢', cost:{mushroom:1,wood:1}, once:false, hint:'배고픔을 조금 회복(+30). 재료가 적게 든다.',
-      make:function(){ S.hunger=Math.min(100,S.hunger+30); clamp(); sfxEat(); floatText(player.x,player.y-30,'+배부름','#9affc0'); flash('버섯 꼬치를 구워 먹었다! 배가 좀 찬다.'); }},
-    {id:'feast', cat:'음식', name:'푸짐한 한 상', icon:'🍲', cost:{mushroom:3,fiber:1}, once:false, hint:'배고픔을 가득 회복(+60)하고 상처도 하나 아문다.',
-      make:function(){ S.hunger=Math.min(100,S.hunger+60); if(S.wounds>0)S.wounds--; clamp(); sfxEat(); floatText(player.x,player.y-30,'+배부름 +목숨','#9affc0'); flash('푸짐한 한 상을 차려 먹었다! 배가 완전히 부르고 기운이 난다.'); }}
-  ];
+  // make() bodies need game state and these helpers, so the list is built here.
+  var RECIPES=createRecipes({S:S,player:player,buildStructure:buildStructure,clamp:clamp,
+    flash:flash,floatText:floatText,makeWeapon:makeWeapon,sfxEat:sfxEat,wearArmor:wearArmor});
   function canAfford(rec){for(var k in rec.cost){if((S.inv[k]||0)<rec.cost[k])return false;}return true;}
-  var MAT_ICON={wood:'🪵',stone:'🪨',mushroom:'🍄',fiber:'🌿'};
   function costText(rec){var parts=[];for(var k in rec.cost){parts.push((MAT_ICON[k]||'')+rec.cost[k]);}return parts.join(' ');}
   function alreadyHave(rec){ return (rec.once&&S.built[rec.id]) || (rec.reqPiece&&S.armor[rec.reqPiece]); }
   function buildStructure(kind){
@@ -1899,7 +1680,7 @@
   function solidAt(px,py){var tx=Math.floor(px/TILE),ty=Math.floor((py+6)/TILE);return solid(tx,ty);}
   function tryMove(nx,ny){var r=10;if(!solidAt(nx,player.y))player.x=Math.max(r,Math.min(MW-r,nx));if(!solidAt(player.x,ny))player.y=Math.max(r,Math.min(MH-r,ny));}
 
-  var raiderSpeed=0.95, lastTick=performance.now();
+  var raiderSpeed=MOVE.raider, lastTick=performance.now();
 
   function facingVec(f){if(f==='up')return[0,-1];if(f==='down')return[0,1];if(f==='left')return[-1,0];return[1,0];}
 
@@ -2244,19 +2025,9 @@
   function flash(msg){msg=cleanMsg(msg);el('log').innerHTML='<div style="padding:7px 12px; background:linear-gradient(180deg,rgba(42,36,28,0.95),rgba(28,24,18,0.95)); border:1px solid var(--edge); border-radius:9px; display:inline-block; color:var(--ink); box-shadow:0 3px 12px rgba(0,0,0,0.4); animation:none;">'+msg+'</div>';clearTimeout(logTimer);logTimer=setTimeout(function(){el('log').innerHTML='';},2400);}
 
   // ===== ENDING — every death is solitary, poor, nasty, brutish, and short =====
-  function buildEnding(by){
-    // the manner of death colours the epitaph; the verdict is always the same five words
-    var arch;
-    if(by==='기습'){arch={t:'등 뒤를 찔린 사람',ep:'끝내 뒤를 보지 못했다. 가장 약해 보이던 사람이 등 뒤에서 너를 쓰러뜨렸다. 규칙 없는 곳에서는 아무리 강해도 안심할 수 없다 — 누구든 누구나 쓰러뜨릴 수 있으니까.',ic:'🫥'};}
-    else if(by==='굶주림'){arch={t:'굶주린 사람',ep:'먹을 것은 늘 모자랐다. 빼앗고 또 빼앗아도 배는 다시 고팠다. 챙겨 줄 사람이 없는 곳에서, 굶주림은 늘 따라다닌다.',ic:'🍖'};}
-    else if(by==='사람'){arch={t:'배신당한 사람',ep:'너는 손을 내밀거나 등을 맡겼다. 하지만 약속을 지키게 만들 사람이 아무도 없는 곳에서는, 믿음이 가장 먼저 칼이 되어 돌아온다.',ic:'✋'};}
-    else {arch={t:'싸우다 쓰러진 사람',ep:'끝까지 칼을 손에서 놓지 못했지만, 그 칼조차 너를 지켜주지 못했다. 모두가 서로의 적인 곳에서, 끝은 늘 이렇게 온다.',ic:'💀'};}
-    var lived=S.day>=14?'오래도 버텼다. 그래도 단 하루도 등 뒤를 마음 놓고 둘 수 없었다.':S.day>=7?'제법 버텼지만, 편히 잠든 밤은 한 번도 없었다.':'짧았다. 규칙 없는 곳에서의 삶이 대개 그렇듯.';
-    return {arch:arch,lived:lived};
-  }
 
   function endGame(by){if(S.over&&S.mode==='over')return;S.over=true;S.mode='over';addShake(14);sfxDread();
-    var E=buildEnding(by);
+    var E=buildEnding(by,S.day);
     var causeShort=by==='기습'?'등 뒤를 찔려 사망':by==='굶주림'?'굶주려 쓰러짐':by==='사람'?'배신당해 사망':'싸우다 사망';
     el('story').innerHTML=
       '<div style="text-align:center; background:linear-gradient(180deg,rgba(28,18,40,0.96),rgba(14,8,22,0.98)); border:1px solid var(--edge); border-radius:var(--border-radius-lg); padding:1.2rem 1.1rem; box-shadow:0 10px 40px rgba(0,0,0,0.5);">'
@@ -2277,42 +2048,6 @@
     onTap(document.getElementById('btn-lev'), function(){sendPrompt('방금 \'글로리아 행성 표류기\'라는 생존 게임을 해봤어. 규칙도 없고, 약속을 지키게 만들 사람도 없는 곳이었어. 누구나 칼 한 번에(특히 등 뒤에서) 서로를 쓰러뜨릴 수 있었어. 나는 '+S.day+'일을 버티고 '+S.killed+'명을 쓰러뜨렸지만 결국 \''+E.arch.t+'\'으로 죽었어. 이런 곳이 왜 이렇게 무섭고 불안정한지, 그리고 이런 곳을 평화롭게 바꾸려면 사람들이 왜 함께 규칙을 만들고 그 규칙을 지킬 \'힘 있는 누군가(정치, 국가)\'를 세우기로 약속하게 되는지, 중학생도 이해할 수 있게 쉽게 설명해줘.');});}
   function statCell(label,val){return '<div style="background:rgba(40,28,56,0.7); border:1px solid var(--edge); border-radius:8px; padding:6px 4px;"><div style="font-size:18px; font-weight:700; color:var(--ink);">'+val+'</div><div style="font-size:9.5px; color:var(--ink-faint); margin-top:1px;">'+label+'</div></div>';}
 
-  // ===== OPENING — a bright, hopeful landing on Planet Gloria =====
-  var openingScenes=[
-    { ic:'🚀', tone:'#c79be8',
-      title:'두근두근, 첫 탐험!',
-      lines:[
-        '너와 친구들을 태운 탐험선이 반짝이는 새 행성으로 향하고 있어. 창밖으로 보랏빛 하늘과 초록 들판이 펼쳐진다.',
-        '"우아—! 저기 좀 봐!" 다들 창문에 붙어 신이 났어.',
-        '그런데 착륙하려는 순간, 배가 살짝 기우뚱— 쿵!'
-      ],
-      btn:'폴짝 내려선다', btnIc:'👀' },
-    { ic:'🌱', tone:'#9affc0',
-      title:'와, 글로리아 행성이다!',
-      lines:[
-        '푹신한 풀밭 위로 사뿐히 내려앉았어. 다행히 아무도 안 다쳤네! 다만 친구들이 여기저기로 흩어져 버렸어.',
-        '여기는 <b style="color:#9affc0;">글로리아 행성</b> — 아무도 살아본 적 없는, 완전히 새로운 땅이야.',
-        '하늘은 화창하고 바람은 따뜻해. <b style="color:#f5e9c8;">"우리… 여기서 한번 같이 살아볼까?"</b>'
-      ],
-      btn:'좋아! 둘러보자', btnIc:'🔍' },
-    { ic:'😊', tone:'#f5e9c8',
-      title:'우리만의 보금자리 만들기',
-      lines:[
-        '먼저 살 곳을 만들어 보자! 들판엔 <b style="color:#9affc0;">🪵나무·🪨돌·🍄버섯</b>이 잔뜩 널려 있어. 걸어가서 주우면 돼.',
-        '재료가 모이면 화면 오른쪽 아래 <b style="color:#ffd24a;">🔨조합</b> 버튼을 눌러 봐. 쉼터·모닥불·무기·갑옷을 마음대로 만들 수 있어!',
-        '흩어진 친구들도 하나둘 만나게 될 거야. 같이 다니면 훨씬 든든하겠지?'
-      ],
-      btn:'재료를 모으러 간다', btnIc:'🚶' },
-    { ic:'👥', tone:'#c79be8',
-      title:'처음 이틀은 마음껏!',
-      lines:[
-        '처음 이틀은 아주 평화로워. 마음 놓고 돌아다니며 재료를 모으고, 쉼터를 짓고, 친구를 사귀어 보자.',
-        '다만 이곳엔 규칙도, 어른도, 약속을 지키게 해 줄 사람도 아직 없어. 모두가 자기 마음대로 할 수 있다는 뜻이야.',
-        '<span style="color:#e8a0c0;">그래서 사흘째부터는… 조금씩 달라질지도 몰라. 그건 직접 겪어 보자!</span>',
-        '<span style="font-size:11.5px; color:#9a8fb0;">조작 — PC: 이동 WASD · 공격/말걸기 Space · 회피 Shift  /  휴대폰: 왼쪽 화면을 끌어 이동 · 오른쪽 버튼으로 공격·회피</span>'
-      ],
-      btn:'글로리아에서 살아보기!', btnIc:'🔥', primary:true }
-  ];
   function showOpening(){ showOpeningScene(0); }
   function showOpeningScene(i){
     S.mode='intro';
@@ -2347,13 +2082,17 @@
     setTimeout(function(){if(!S.over)flash('글로리아 1일째, 화창해! 🪵나무·🪨돌·🌿덩굴·🍄버섯을 모아서 🔨조합 창을 열어 봐.');},900);
   }
 
-  function reset(){S={over:false,mode:'intro',day:1,hunger:100,wounds:0,killed:0,fear:0,allies:0,betrayed:0,rep:0,armor:{helm:false,chest:false,arms:false,legs:false},questsDone:0,inv:{wood:0,stone:0,mushroom:0,fiber:0},built:{shelter:false,campfire:false}};
+  // S is cleared IN PLACE, never reassigned: the STORIES and RECIPES factories in
+  // src/data/ close over this object, so its identity has to survive a restart.
+  function reset(){var fresh={over:false,mode:'intro',day:1,hunger:100,wounds:0,killed:0,fear:0,allies:0,betrayed:0,rep:0,armor:{helm:false,chest:false,arms:false,legs:false},questsDone:0,inv:{wood:0,stone:0,mushroom:0,fiber:0},built:{shelter:false,campfire:false}};
+    for(var _k in S)delete S[_k];
+    for(var _f in fresh)S[_f]=fresh[_f];
     dayTimer=0;darkness=0;dayBanner.t=0;shake=0;floaters=[];hitStop=0;starveTimer=0;festerTimer=0;healTimer=0;
     player.atk=0;player.atkCool=0;player.hurt=0;player.inv=0;player.dashCd=0;player.dashT=0;player.weapon='fist';
     armorDrops=[];companions=[];activeQuest=null;
-    genMap();player.x=MW/2;player.y=MH/2;player.facing='down';player.walk=0;foods=[];spawnFood(10);critters=[];ensureCritters();weapons=[];armorDrops=[];spawnResources();structures=[];spawnNeighbors(5);spawnRaiders(0);adjustRaiders();el("log").innerHTML="";render();showOpening();}
+    genMap();player.x=MW/2;player.y=MH/2;player.facing='down';player.walk=0;foods=[];spawnFood(SPAWN.foodInitial);critters=[];ensureCritters();weapons=[];armorDrops=[];spawnResources();structures=[];spawnNeighbors(SPAWN.neighbors);spawnRaiders(0);adjustRaiders();el("log").innerHTML="";render();showOpening();}
 
-  genMap();player.x=MW/2;player.y=MH/2;spawnFood(10);critters=[];ensureCritters();weapons=[];armorDrops=[];spawnResources();structures=[];spawnNeighbors(5);spawnRaiders(0);render();adjustRaiders();frame();stepLoop();showOpening();
+  genMap();player.x=MW/2;player.y=MH/2;spawnFood(SPAWN.foodInitial);critters=[];ensureCritters();weapons=[];armorDrops=[];spawnResources();structures=[];spawnNeighbors(SPAWN.neighbors);spawnRaiders(0);render();adjustRaiders();frame();stepLoop();showOpening();
 })();
 
 /* ===== viewport fit: was a second inline <script> at the end of the body ===== */
