@@ -1,0 +1,248 @@
+/* Glorya — all styles for the game shell.
+   Step 4: the two inline <style> blocks and every style="" attribute from
+   index.html were consolidated here. Values are unchanged. */
+
+/* ===== page shell (was the <style> block in <head>) ===== */
+  /* ---- self-contained design tokens (replacing the host app's variables) ---- */
+  :root{
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo",
+                 "Noto Sans KR", Roboto, "Malgun Gothic", sans-serif;
+    --border-radius-md: 10px;
+    --border-radius-lg: 14px;
+  }
+  *{ box-sizing: border-box; }
+  html, body{
+    margin:0; padding:0; height:100%; width:100%;
+    background:#0a0612;
+    font-family: var(--font-sans);
+    overflow:hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* center the game and fit it to the viewport while keeping 16:9 */
+  #stage{
+    position:fixed; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    padding:8px;
+  }
+  /* the shell width is controlled by the fit() script (height-aware 16:9) */
+  #game-shell{
+    margin:0 !important;
+    max-width:none !important;
+  }
+  /* accessibility-only text */
+  .sr-only{
+    position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+    overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
+  }
+  /* if the icon font fails to load, keep layout tidy (icons are decorative) */
+  /* ===================== MOBILE ===================== */
+  /* On phones, use every pixel: kill outer padding/margins and let the shell fill the screen. */
+  @media (max-width: 820px), (pointer: coarse){
+    #stage{ padding:0; }
+    #game-shell{ padding:0 !important; border-radius:0 !important; }
+    #game-shell::before{ display:none; }
+    /* the crash-intro/title row wastes vertical space on tiny screens */
+    #game-shell .title-row{ display:none !important; }
+  }
+  /* Rotate-to-landscape nudge: shown only on a portrait phone. */
+  #rotate-hint{
+    display:none;
+    position:fixed; inset:0; z-index:9999;
+    background:radial-gradient(120% 90% at 50% 20%, #2e2440 0%, #140e22 70%, #0a0612 100%);
+    color:#ece0f2; font-family:var(--font-sans);
+    flex-direction:column; align-items:center; justify-content:center; gap:18px; text-align:center; padding:32px;
+  }
+  #rotate-hint .phone{
+    width:54px; height:90px; border:3px solid #c79be8; border-radius:12px; position:relative;
+    animation:rotateNudge 2.2s ease-in-out infinite; box-shadow:0 0 24px rgba(199,155,232,0.35);
+  }
+  #rotate-hint .phone::after{content:"";position:absolute;left:50%;bottom:6px;width:16px;height:2px;background:#c79be8;transform:translateX(-50%);border-radius:2px;}
+  #rotate-hint h2{font-size:19px;margin:0;font-weight:700;color:#f0e2fa;}
+  #rotate-hint p{font-size:13.5px;margin:0;color:#b3a3c4;line-height:1.5;max-width:320px;}
+  @keyframes rotateNudge{ 0%,40%{transform:rotate(0);} 60%,100%{transform:rotate(-90deg);} }
+  /* Only a PORTRAIT, touch-capable screen sees the hint. */
+  @media (max-width: 820px) and (orientation: portrait) and (pointer: coarse){
+    #rotate-hint{ display:flex; }
+  }
+  .emo{ font-style:normal; font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif; line-height:1; }
+
+/* ===== game shell tokens (was the <style> block inside #stage) ===== */
+#game-shell{
+  --ink:#ece0f2; --ink-dim:#b3a3c4; --ink-faint:#86749c;
+  --gold:#c79be8; --gold-dim:#9a6dc4; --blood:#c0398a;
+  --panel:rgba(34,24,44,0.74); --panel-2:rgba(44,30,58,0.82);
+  --edge:rgba(150,110,190,0.38);
+  font-family: var(--font-sans);
+  background:
+    radial-gradient(120% 90% at 50% -10%, #2e2440 0%, #1a1228 55%, #0d0816 100%);
+  border-radius: var(--border-radius-lg);
+  padding: 0.4rem;
+  position:relative; overflow:hidden;
+}
+#game-shell::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(140% 120% at 50% 0%,transparent 55%,rgba(0,0,0,0.55) 100%);}
+#game-shell .title-row{display:flex;align-items:center;gap:.45rem;margin-bottom:.45rem;position:relative;}
+#game-shell .title-row h3{font-size:14px;font-weight:600;letter-spacing:.3px;color:var(--ink);margin:0;}
+#game-shell .title-row .sub{font-size:10.5px;color:var(--ink-faint);margin-left:auto;font-style:italic;}
+#game-shell .title-row .ti{color:var(--gold);font-size:16px;}
+#game-shell .stat-card{
+  background:var(--panel); border:1px solid var(--edge);
+  border-radius:9px; padding:.3rem .55rem; backdrop-filter:blur(2px);
+  box-shadow: inset 0 1px 0 rgba(230,210,255,0.06), 0 2px 8px rgba(0,0,0,0.3);
+}
+#game-shell .stat-label{font-size:10px;color:var(--ink-dim);display:flex;align-items:center;gap:4px;text-transform:uppercase;letter-spacing:.5px;}
+#game-shell .stat-label .ti{font-size:11px;opacity:.8;}
+#game-shell .stat-val{font-size:16px;font-weight:600;color:var(--ink);margin-top:0px;font-variant-numeric:tabular-nums;line-height:1.2;}
+#game-shell #story button{
+  background:linear-gradient(180deg,#3d2c52,#241834);
+  color:var(--ink); border:1px solid var(--edge); border-radius:9px;
+  cursor:pointer; transition:all .15s; font-family:inherit;
+  box-shadow: inset 0 1px 0 rgba(230,210,255,0.08);
+}
+#game-shell #story button:hover{background:linear-gradient(180deg,#4d3a66,#2e2042);border-color:var(--gold-dim);transform:translateY(-1px);}
+#game-shell #story button.primary{background:linear-gradient(180deg,#7a2870,#56184e);border-color:#a4439a;}
+#game-shell #story button.primary:hover{background:linear-gradient(180deg,#8e3284,#6a2060);}
+
+/* ===== moved out of style="" attributes in index.html =====
+   Declarations are copied verbatim. Elements that already had an id are
+   styled by that id, so the original inline specificity ordering (id beats
+   class) is preserved; only the handful of unnamed wrappers gained a class. */
+
+#game{ font-family: var(--font-sans); }
+
+#screen-wrap{
+  position: relative; width:100%; aspect-ratio:16/9;
+  border-radius: var(--border-radius-md); overflow:hidden;
+  box-shadow: 0 0 0 2px #1a1228, 0 0 0 5px #3a2a52, 0 8px 28px rgba(0,0,0,0.45);
+}
+#screen{ width:100%; height:100%; display:block; touch-action:none; }
+
+/* ---- top HUD ---- */
+#hud{
+  position:absolute; left:0; top:0; width:100%; display:flex; gap:6px;
+  padding:8px; box-sizing:border-box; pointer-events:none; z-index:4;
+}
+#hud .stat-card{ flex:1; }
+#hud .stat-card.hud-card-life{ flex:1.3; }
+#life-pips{ letter-spacing:1px; }
+#armor-pips{ font-size:11px; letter-spacing:2px; margin-top:1px; color:#9ec8e8; min-height:13px; }
+#s-weapon{ font-size:15px; }
+
+/* ---- hunger bar ---- */
+.hunger-wrap{ position:absolute; left:10px; top:70px; width:140px; z-index:4; pointer-events:none; }
+.hunger-label{
+  font-size:9.5px; color:#f0e2fa; text-shadow:0 1px 3px #000; margin-bottom:3px;
+  letter-spacing:1px; text-transform:uppercase; display:flex; align-items:center; gap:4px;
+}
+.hunger-label .emo{ font-size:11px; }
+.hunger-track{
+  height:9px; background:rgba(0,0,0,0.55); border-radius:5px; overflow:hidden;
+  border:1px solid rgba(200,155,232,0.35); box-shadow:0 1px 4px rgba(0,0,0,0.5);
+}
+#hunger-fill{ height:100%; width:100%; background:linear-gradient(90deg,#9a6dc4,#c79be8); transition:width .2s, background .3s; }
+
+/* ---- threat / hint / log ---- */
+#threat{
+  position:absolute; right:10px; top:70px; font-size:10px; color:#ffdede;
+  text-shadow:0 1px 2px #000;
+  background:linear-gradient(180deg,rgba(150,30,90,0.9),rgba(90,15,50,0.9));
+  padding:3px 10px; border-radius:7px; display:none;
+  border:1px solid rgba(255,120,170,0.4); box-shadow:0 2px 8px rgba(120,0,50,0.5);
+  letter-spacing:1px; z-index:4;
+}
+#threat .emo{ font-size:11px; vertical-align:-1px; }
+#hint{
+  position:absolute; left:50%; top:8px; transform:translateX(-50%); font-size:11px;
+  color:#f0e2fa; background:rgba(26,16,40,0.74); padding:4px 12px; border-radius:8px;
+  pointer-events:none; border:1px solid rgba(150,110,190,0.4); letter-spacing:.3px;
+  z-index:6; display:none;
+}
+#log{
+  position:absolute; left:50%; bottom:74px; transform:translateX(-50%); width:92%;
+  text-align:center; font-size:12px; color:var(--ink-dim); line-height:1.4;
+  pointer-events:none; z-index:6;
+}
+
+/* ---- story overlay ---- */
+#story-layer{
+  position:absolute; inset:0; display:none; align-items:center; justify-content:center;
+  padding:14px; box-sizing:border-box; z-index:10; background:rgba(8,5,14,0.45);
+}
+#story{ width:100%; max-width:520px; max-height:100%; overflow:auto; }
+
+/* ---- inventory + craft bar ---- */
+#craft-bar{
+  position:absolute; left:8px; right:8px; bottom:8px; display:none;
+  align-items:center; gap:8px; z-index:20; pointer-events:none;
+}
+#inv-display{
+  display:flex; gap:9px; font-size:13px; color:var(--ink); font-weight:700;
+  white-space:nowrap;
+  background:linear-gradient(180deg,rgba(30,22,44,0.94),rgba(18,12,26,0.96));
+  border:1px solid var(--edge); border-radius:10px; padding:6px 10px; pointer-events:auto;
+}
+#craft-open{
+  pointer-events:auto; display:flex; align-items:center; gap:5px;
+  background:linear-gradient(180deg,rgba(122,40,112,0.95),rgba(86,24,78,0.96));
+  border:1px solid #a4439a; border-radius:10px; padding:7px 13px; color:#ffe0f4;
+  font-weight:700; font-size:13px; cursor:pointer; box-shadow:0 3px 12px rgba(0,0,0,0.4);
+  touch-action:manipulation; -webkit-tap-highlight-color:transparent;
+}
+
+/* ---- craft modal ---- */
+#craft-modal{
+  position:absolute; inset:0; display:none; align-items:center; justify-content:center;
+  padding:12px; box-sizing:border-box; z-index:25; background:rgba(8,5,14,0.62);
+}
+.craft-panel{
+  width:100%; max-width:520px; max-height:100%; overflow:auto;
+  background:linear-gradient(180deg,rgba(30,22,44,0.98),rgba(16,10,24,0.99));
+  border:1px solid var(--edge); border-radius:14px; padding:14px;
+  box-shadow:0 12px 44px rgba(0,0,0,0.6);
+}
+.craft-head{ display:flex; align-items:center; margin-bottom:6px; }
+.craft-title{ font-size:16px; font-weight:700; color:var(--ink); }
+#craft-inv{ margin-left:auto; font-size:12px; color:var(--ink-dim); font-weight:600; }
+#craft-close{
+  margin-left:10px; background:rgba(60,44,80,0.8); border:1px solid var(--edge);
+  border-radius:8px; color:var(--ink); width:30px; height:30px; font-size:16px;
+  cursor:pointer; line-height:1; padding:0;
+}
+.craft-hint{ font-size:11.5px; color:var(--ink-faint); margin-bottom:10px; }
+
+/* ---- mobile touch controls ---- */
+#touch-controls{ display:none; position:absolute; inset:0; pointer-events:none; z-index:5; }
+#joy-zone{
+  position:absolute; left:0; bottom:56px; width:44%; height:44%;
+  pointer-events:auto; touch-action:none;
+}
+#joy-base{
+  position:absolute; display:none; width:104px; height:104px;
+  margin-left:-52px; margin-top:-52px; border-radius:50%;
+  background:radial-gradient(circle,rgba(199,155,232,0.16),rgba(40,28,56,0.28));
+  border:2px solid rgba(199,155,232,0.45); box-shadow:0 0 18px rgba(0,0,0,0.35);
+}
+#joy-knob{
+  position:absolute; left:50%; top:50%; width:46px; height:46px;
+  margin-left:-23px; margin-top:-23px; border-radius:50%;
+  background:radial-gradient(circle at 40% 35%,#d9b8f0,#9a6dc4);
+  border:2px solid #f0e2fa; box-shadow:0 2px 10px rgba(0,0,0,0.5);
+}
+.touch-actions{
+  position:absolute; right:14px; bottom:72px; display:flex; flex-direction:column;
+  align-items:center; gap:12px; pointer-events:auto;
+}
+#btn-dash{
+  width:56px; height:56px; border-radius:50%; border:2px solid rgba(120,200,255,0.6);
+  background:radial-gradient(circle at 40% 35%,rgba(120,200,255,0.32),rgba(30,40,70,0.55));
+  color:#cfeaff; font-size:10px; font-weight:700; touch-action:none;
+  box-shadow:0 3px 12px rgba(0,0,0,0.45); -webkit-tap-highlight-color:transparent; padding:0;
+}
+#btn-hit{
+  width:80px; height:80px; border-radius:50%; border:2px solid rgba(232,120,160,0.65);
+  background:radial-gradient(circle at 40% 35%,rgba(232,120,160,0.42),rgba(70,20,40,0.6));
+  color:#ffe0ec; font-size:12px; font-weight:800; touch-action:none;
+  box-shadow:0 4px 16px rgba(0,0,0,0.5); -webkit-tap-highlight-color:transparent; padding:0;
+}
+#btn-dash .emo{ font-size:18px; display:block; }
+#btn-hit .emo{ font-size:28px; display:block; }

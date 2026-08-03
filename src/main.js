@@ -1,3 +1,4 @@
+import './styles.css';
 import { actx, sfxDash, sfxEat, sfxHurt } from './audio.js';
 import { DAY_MS, DIFF, HUNGER_RATE, MAPC, MAPR, MAXHP, MH, MOVE, MW, RES, SPAWN, TILE, VH, VW } from './data/balance.js';
 import { QUEST_NAMES, TAUNTS_ATTACK, TAUNTS_BETRAY, createStories } from './data/dialogue.js';
