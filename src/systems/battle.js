@@ -24,6 +24,6 @@ export function advanceBattle(){if(!G.battle)return;if(G.battle.phase==='intro')
   if(G.battle.phase==='msg'){if(G.battle.after==='death'){S.mode='field';G.battle=null;endGame('사람');return;}
     if(G.battle.after==='next'){G.battle.nodeId=G.battle.nextNode;G.battle.nodeText=G.battle.nextNodeText;enterMenu();return;}endBattle();return;}}
 
-function endBattle(){var n=G.battle.n;var recruit=G.battle.recruit;n.done=true;S.mode='field';G.battle=null;el('hint').textContent='이동 WASD/조이스틱 · 공격 · 회피';player.y+=3;
+function endBattle(){var n=G.battle.n;var recruit=G.battle.recruit;n.done=true;S.mode='field';G.battle=null;el('hint').textContent='이동 WASD · 공격/말걸기 Space · 회피 Shift';player.y+=3;
   if(recruit){recruitCompanion(n);flash('「'+(QUEST_NAMES[n.key]||n.name||'동료')+'」이(가) 함께 다니기로 했다! 곁에서 싸움을 도와줄 거야.');}
   refreshNeighbors();}

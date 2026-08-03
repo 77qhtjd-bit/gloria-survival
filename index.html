@@ -7,11 +7,6 @@
 <meta name="description" content="우주선이 글로리아 행성에 불시착했다. 규칙도 약속도 없는 곳에서 먹을 것과 무기를 모으며 살아남는 생존 게임. 사흘째부터 모두가 서로를 노린다.">
 </head>
 <body>
-<div id="rotate-hint">
-  <div class="phone"></div>
-  <h2>가로로 돌려 주세요</h2>
-  <p>글로리아 행성은 넓어요. 스마트폰을 가로로 눕히면 화면이 커지고 조작하기 편해져요.</p>
-</div>
 <h2 class="sr-only">우주선이 글로리아 행성에 불시착한 뒤 시작되는 생존 게임. 화창한 들판에서 열매와 무기, 갑옷을 모으다가 사흘째부터 다른 생존자들이 서로를 노린다. 다른 사람에게 부탁을 받아 갑옷·무기·동료를 얻을 수 있지만, 일부는 배신한다. 누구나 단 한 번의 칼질로, 특히 등 뒤에서 죽을 수 있다.</h2>
 <div id="stage">
 <div id="game-shell">
@@ -50,7 +45,7 @@
 
     <div id="threat"><span class="emo">👀</span> 사방이 노린다</div>
 
-    <div id="hint">이동 WASD/조이스틱 · 공격 · 회피</div>
+    <div id="hint">이동 WASD · 공격/말걸기 Space · 회피 Shift</div>
 
     <!-- flash log (bottom center, above craft bar) -->
     <div id="log"></div>
@@ -85,18 +80,6 @@
       </div>
     </div>
 
-    <!-- ===== MOBILE TOUCH CONTROLS ===== -->
-    <div id="touch-controls">
-      <div id="joy-zone">
-        <div id="joy-base">
-          <div id="joy-knob"></div>
-        </div>
-      </div>
-      <div class="touch-actions">
-        <button id="btn-dash" aria-label="회피"><span class="emo">🌀</span>회피</button>
-        <button id="btn-hit" aria-label="공격"><span class="emo">⚔</span>공격</button>
-      </div>
-    </div>
   </div>
 </div>
 </div>

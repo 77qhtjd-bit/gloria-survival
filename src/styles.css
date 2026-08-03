@@ -36,33 +36,12 @@
   }
   /* if the icon font fails to load, keep layout tidy (icons are decorative) */
   /* ===================== MOBILE ===================== */
-  /* On phones, use every pixel: kill outer padding/margins and let the shell fill the screen. */
-  @media (max-width: 820px), (pointer: coarse){
+  /* Small screens: use every pixel — kill outer padding so the shell fills the window. */
+  @media (max-width: 820px){
     #stage{ padding:0; }
     #game-shell{ padding:0 !important; border-radius:0 !important; }
     #game-shell::before{ display:none; }
-    /* the crash-intro/title row wastes vertical space on tiny screens */
     #game-shell .title-row{ display:none !important; }
-  }
-  /* Rotate-to-landscape nudge: shown only on a portrait phone. */
-  #rotate-hint{
-    display:none;
-    position:fixed; inset:0; z-index:9999;
-    background:radial-gradient(120% 90% at 50% 20%, #2e2440 0%, #140e22 70%, #0a0612 100%);
-    color:#ece0f2; font-family:var(--font-sans);
-    flex-direction:column; align-items:center; justify-content:center; gap:18px; text-align:center; padding:32px;
-  }
-  #rotate-hint .phone{
-    width:54px; height:90px; border:3px solid #c79be8; border-radius:12px; position:relative;
-    animation:rotateNudge 2.2s ease-in-out infinite; box-shadow:0 0 24px rgba(199,155,232,0.35);
-  }
-  #rotate-hint .phone::after{content:"";position:absolute;left:50%;bottom:6px;width:16px;height:2px;background:#c79be8;transform:translateX(-50%);border-radius:2px;}
-  #rotate-hint h2{font-size:19px;margin:0;font-weight:700;color:#f0e2fa;}
-  #rotate-hint p{font-size:13.5px;margin:0;color:#b3a3c4;line-height:1.5;max-width:320px;}
-  @keyframes rotateNudge{ 0%,40%{transform:rotate(0);} 60%,100%{transform:rotate(-90deg);} }
-  /* Only a PORTRAIT, touch-capable screen sees the hint. */
-  @media (max-width: 820px) and (orientation: portrait) and (pointer: coarse){
-    #rotate-hint{ display:flex; }
   }
   .emo{ font-style:normal; font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif; line-height:1; }
 
@@ -209,40 +188,3 @@
   cursor:pointer; line-height:1; padding:0;
 }
 .craft-hint{ font-size:11.5px; color:var(--ink-faint); margin-bottom:10px; }
-
-/* ---- mobile touch controls ---- */
-#touch-controls{ display:none; position:absolute; inset:0; pointer-events:none; z-index:5; }
-#joy-zone{
-  position:absolute; left:0; bottom:56px; width:44%; height:44%;
-  pointer-events:auto; touch-action:none;
-}
-#joy-base{
-  position:absolute; display:none; width:104px; height:104px;
-  margin-left:-52px; margin-top:-52px; border-radius:50%;
-  background:radial-gradient(circle,rgba(199,155,232,0.16),rgba(40,28,56,0.28));
-  border:2px solid rgba(199,155,232,0.45); box-shadow:0 0 18px rgba(0,0,0,0.35);
-}
-#joy-knob{
-  position:absolute; left:50%; top:50%; width:46px; height:46px;
-  margin-left:-23px; margin-top:-23px; border-radius:50%;
-  background:radial-gradient(circle at 40% 35%,#d9b8f0,#9a6dc4);
-  border:2px solid #f0e2fa; box-shadow:0 2px 10px rgba(0,0,0,0.5);
-}
-.touch-actions{
-  position:absolute; right:14px; bottom:72px; display:flex; flex-direction:column;
-  align-items:center; gap:12px; pointer-events:auto;
-}
-#btn-dash{
-  width:56px; height:56px; border-radius:50%; border:2px solid rgba(120,200,255,0.6);
-  background:radial-gradient(circle at 40% 35%,rgba(120,200,255,0.32),rgba(30,40,70,0.55));
-  color:#cfeaff; font-size:10px; font-weight:700; touch-action:none;
-  box-shadow:0 3px 12px rgba(0,0,0,0.45); -webkit-tap-highlight-color:transparent; padding:0;
-}
-#btn-hit{
-  width:80px; height:80px; border-radius:50%; border:2px solid rgba(232,120,160,0.65);
-  background:radial-gradient(circle at 40% 35%,rgba(232,120,160,0.42),rgba(70,20,40,0.6));
-  color:#ffe0ec; font-size:12px; font-weight:800; touch-action:none;
-  box-shadow:0 4px 16px rgba(0,0,0,0.5); -webkit-tap-highlight-color:transparent; padding:0;
-}
-#btn-dash .emo{ font-size:18px; display:block; }
-#btn-hit .emo{ font-size:28px; display:block; }

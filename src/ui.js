@@ -209,7 +209,7 @@ function showOpeningScene(i){
   })();
 
 function startField(){
-  S.mode='field';el('story').innerHTML='';el('hint').textContent='이동 WASD/조이스틱 · 공격 · 회피';G.dayTimer=0;G.darkness=0;actx();showDayBanner(1);
+  S.mode='field';el('story').innerHTML='';el('hint').textContent='이동 WASD · 공격/말걸기 Space · 회피 Shift';G.dayTimer=0;G.darkness=0;actx();showDayBanner(1);
   raiders.length=0; // days 1-2 are peaceful — no enemies at all
   setTimeout(function(){if(!S.over)flash('글로리아 1일째, 화창해! 🪵나무·🪨돌·🌿덩굴·🍄버섯을 모아서 🔨조합 창을 열어 봐.');},900);
 }

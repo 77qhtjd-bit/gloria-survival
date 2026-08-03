@@ -26,13 +26,14 @@ export function betrayNow(n,when){
 
 // ===== COMPANIONS =====
 export function recruitCompanion(n){
-  // Half of all companions are secretly untrustworthy. In a place with no rules, even a
-  // friend fighting at your side may turn — and the WAIT is the point: some flip almost at
-  // once, others fight loyally for a long while first, so you can never tell which is which.
-  var willBetray = Math.random()<0.5;
-  var soon = Math.random()<0.35;                       // a third of traitors turn quickly
-  var delay = soon ? (5000 + Math.random()*5000)       // 5–10s: the quick knife
-                   : (16000 + Math.random()*24000);    // 16–40s: the one you came to trust
+  // ===== THREE KINDS OF COMPANION — the whole lesson lives here =====
+  //   ① 충직한 동료        : walks with you, fights beside you, never turns.
+  //   ② 수락 순간 배신자   : stabs you the moment you agree/hand in (handled in betrayNow).
+  //   ③ 같이 다니다 배신   : THIS path — travels at your side, earns your trust, then
+  //                          stabs you and runs away. Timed short enough (5–16s of real
+  //                          companionship) that every student actually lives through it.
+  var willBetray = Math.random()<0.7;                  // ③ is the common case
+  var delay = 5000 + Math.random()*11000;              // 5–16s of loyal company first
   var ckey = n.c || n.key || 'archer';   // quest-givers use .c, story NPCs use .key
   companions.push({x:player.x-20,y:player.y,c:ckey,name:n.name||'',facing:'down',walk:0,
     atkCd:0,target:null,bob:Math.random()*6,hp:2,
@@ -52,12 +53,21 @@ export function updateCompanions(dt){
       floatText(co.x,co.y-30,'…?','#e8c060'); sfxDread();
     } else if(co.traitor && co.warned && now>=co.betrayAt){
       var nm=(QUEST_NAMES[co.c]||'나그네')+' '+co.name;
+      var bx=co.x, by=co.y;
       companions.splice(ci,1); S.allies=Math.max(0,S.allies-1); S.betrayed++;
-      S.fear=Math.min(10,S.fear+2); addShake(10); sfxBackstab();
-      var rd=mkRaider(co.x,co.y,'jackal'); rd.state='alert'; rd.fromAlly=true;
-      sayLine(rd, TAUNTS_BETRAY, 1);   // always taunt when betraying
+      S.fear=Math.min(10,S.fear+2); addShake(12); sfxBackstab();
+      // THE STAB: a companion who has been walking beside you is, by definition, close —
+      // so the betrayal actually lands a hit (deeper if they caught your back), and only
+      // THEN do they bolt. This is the lesson: a promise nobody can enforce is worth nothing.
+      var dist=Math.hypot(bx-player.x, by-player.y);
+      var hit=false;
+      if(dist<64){ woundPlayer(isBehind(bx,by,player), bx, by, '배신'); hit=true; }
+      // they flee after the strike instead of standing and fighting
+      var rd=mkRaider(bx,by,'jackal'); rd.state='alert'; rd.fromAlly=true;
+      rd.betrayerFlee=true; rd.fleeT=5200;      // run away for ~5s
+      sayLine(rd, TAUNTS_BETRAY, 1);
       raiders.push(rd);
-      flash('⚠ '+nm+'의 배신! 함께 싸우던 동료가 갑자기 너에게 칼을 겨눈다 — 여기선 누구도 믿을 수 없다.');
+      flash('⚠ '+nm+'의 배신! '+(hit?'곁에 있던 동료가 칼을 꽂고 달아난다':'동료가 등을 돌리고 달아난다')+' — 여기선 누구도 믿을 수 없다.');
       continue;
     }
     // find nearest live raider in range
@@ -74,10 +84,17 @@ export function updateCompanions(dt){
       co.facing=Math.abs(dx)>Math.abs(dy)?(dx<0?'left':'right'):(dy<0?'up':'down');}
     else co.walk=0;
     co.atkCd-=dt;
-    // strike a raider it's adjacent to (backstab-style instant kill)
-    if(best&&bd<26&&co.atkCd<=0){co.atkCd=700;
-      best.dead=true;best.deadT=620;S.killed++;sfxKill();addShake(4);
-      floatText(best.x,best.y-28,'동료가 도왔다','#9affc0');
+    // Companions HELP, they don't win the fight for you: two hits to put a raider down,
+    // with a slow swing, so the player still has to do the real work.
+    if(best&&bd<26&&co.atkCd<=0){co.atkCd=1100;
+      best.hp=(best.hp===undefined?2:best.hp)-1;
+      best.hurt=200; addShake(2);
+      if(best.hp<=0){
+        best.dead=true;best.deadT=620;S.killed++;sfxKill();addShake(4);
+        floatText(best.x,best.y-28,'동료가 도왔다','#9affc0');
+      } else {
+        floatText(best.x,best.y-24,'퍽!','#cfe0ff');
+      }
       raiders.forEach(function(o){if(!o.dead&&Math.hypot(o.x-best.x,o.y-best.y)<120){o.state='alert';}});
     }
   }

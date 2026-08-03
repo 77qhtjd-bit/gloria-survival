@@ -33,7 +33,7 @@ export const openingScenes=[
       '처음 이틀은 아주 평화로워. 마음 놓고 돌아다니며 재료를 모으고, 쉼터를 짓고, 친구를 사귀어 보자.',
       '다만 이곳엔 규칙도, 어른도, 약속을 지키게 해 줄 사람도 아직 없어. 모두가 자기 마음대로 할 수 있다는 뜻이야.',
       '<span style="color:#e8a0c0;">그래서 사흘째부터는… 조금씩 달라질지도 몰라. 그건 직접 겪어 보자!</span>',
-      '<span style="font-size:11.5px; color:#9a8fb0;">조작 — PC: 이동 WASD · 공격/말걸기 Space · 회피 Shift  /  휴대폰: 왼쪽 화면을 끌어 이동 · 오른쪽 버튼으로 공격·회피</span>'
+      '<span style="font-size:11.5px; color:#9a8fb0;">조작 — 이동 WASD · 공격/말걸기 Space · 회피 Shift</span>'
     ],
     btn:'글로리아에서 살아보기!', btnIc:'🔥', primary:true }
 ];

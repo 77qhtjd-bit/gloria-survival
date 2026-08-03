@@ -178,7 +178,7 @@ export function closeQuest(){
   S.mode='field'; el('story').innerHTML='';
   questNpc=null;
   if(nq) setTimeout(function(){ nq._busy=false; }, 350);   // release the debounce for real
-  el('hint').textContent='이동 WASD/조이스틱 · 공격 · 회피';
+  el('hint').textContent='이동 WASD · 공격/말걸기 Space · 회피 Shift';
   player.y+=3;
 }
 
