@@ -16,7 +16,7 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
   // tile codes: 0 grass,1 dark grass,2 tree,3 water,4 sand,5 rock path,6 flower,7 pine(block),8 snow,9 rock(block)
   var map=[], biome=[];
   function genMap(){
-    map=[];biome=[];
+    map.length=0;biome.length=0;
     // biome via coarse value noise
     function vnoise(x,y,s){var xi=Math.floor(x/s),yi=Math.floor(y/s);
       function h(a,b){var n=(a*73856093^b*19349663)>>>0;return ((n%1000)/1000);}
@@ -48,10 +48,24 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
   function hash(x,y){var h=(x*374761393+y*668265263)>>>0;h=(h^(h>>13))*1274126177>>>0;return (h>>>0)/4294967295;}
 
   var cam={x:0,y:0};
+  // Mutable run state that more than one module has to read AND write. Kept on an
+  // object because ES module bindings are read-only for importers; per-module
+  // scalars (craftOpen, resRespawnAt, the stepLoop timers, ...) stay local.
+  var G={
+    dayTimer:0,
+    darkness:0,        // bright violet day1 → near-black
+    calmDay:1,         // 0..1, set each frame; fades the terrain's bright early-day glow
+    shake:0,
+    hitStop:0,
+    battle:null,
+    wantInteract:false,// set when the player presses SPACE near an NPC
+    activeQuest:null,  // current NPC mission
+    questMarker:null,
+    questComplete:{t:0,name:''}  // brief "퀘스트 완료!" celebration on the top banner
+  };
   function updateCam(){cam.x=Math.round(player.x-VW/2);cam.y=Math.round(player.y-VH/2);}
 
   // per-subcell value noise so a tile isn't one flat block (kills the "big square" look)
-  var calmDay=1;  // 0..1, set each frame; smoothly fades the terrain's bright early-day glow
   // representative [a,b,dot] colours for each ground tile type — used to bleed
   // neighbouring terrain across tile borders so edges aren't razor-straight.
   function tileTone(t){
@@ -69,7 +83,7 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
 
   function baseFill(px,py,a,b,dot,tx,ty){
     var SC=10;                                 // 10px sub-cells (4x4 per tile) → far fewer rects, much lighter to draw
-    var boost=calmDay*20;                       // lift terrain luminance on bright early days (fades smoothly)
+    var boost=G.calmDay*20;                       // lift terrain luminance on bright early days (fades smoothly)
     var pa=_h2(a), pb=_h2(b);
     // neighbour tones (for edge bleeding). null where there's nothing to bleed.
     var myT=tileAt(tx,ty);
@@ -426,8 +440,6 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
   function armorCount(){var a=S.armor;return (a.helm?1:0)+(a.chest?1:0)+(a.arms?1:0)+(a.legs?1:0);}
   // a worn piece absorbs an incoming wound, then shatters
   function breakArmor(){var order=['helm','arms','legs','chest'];for(var i=0;i<order.length;i++){if(S.armor[order[i]]){S.armor[order[i]]=false;return order[i];}}return null;}
-  var dayTimer=0;
-  var darkness=0;          // bright violet day1 → near-black
   function diff(){return DIFF.base + (S.day-1)*DIFF.perDay + S.killed*DIFF.perKill;} // gentler scaling; skill should matter more than the clock
 
   // PLAYER — fragile. One body, one wooden sword.
@@ -436,7 +448,7 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
   function curWeapon(){return WEAPONS[player.weapon]||WEAPONS.fist;}
   var weapons=[];  // dropped weapon pickups on the ground: {x,y,kind,bob}
   // 현재 미사용 — 무기/방어구는 조합으로만 획득
-  function spawnWeapons(n){weapons=[];for(var i=0;i<n;i++)addWeaponDrop();}
+  function spawnWeapons(n){weapons.length=0;for(var i=0;i<n;i++)addWeaponDrop();}
   // 현재 미사용 — 무기/방어구는 조합으로만 획득
   function addWeaponDrop(kind){var f=freeTile();
     // early game favors weak weapons; later drops can be stronger
@@ -448,7 +460,6 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
 
   var armorDrops=[]; // {x,y,piece,bob}
   var companions=[]; // allies that follow & fight for you
-  var activeQuest=null; // current NPC mission
   // 현재 미사용 — 무기/방어구는 조합으로만 획득
   function addArmorDrop(piece){var f=freeTile();if(!piece)piece=ARMOR_KINDS[Math.floor(Math.random()*ARMOR_KINDS.length)];armorDrops.push({x:f.x,y:f.y,piece:piece,bob:Math.random()*6});}
   // 현재 미사용 — 무기/방어구는 조합으로만 획득
@@ -461,8 +472,7 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
 
 
   // screen shake
-  var shake=0;
-  function addShake(v){shake=Math.min(16,shake+v);}
+  function addShake(v){G.shake=Math.min(16,G.shake+v);}
 
   // floating combat text
   var floaters=[];
@@ -476,7 +486,6 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
   }
 
   // hit-stop (freeze a few frames on a kill for impact)
-  var hitStop=0;
 
   // tiny WebAudio SFX (no assets)
   var AC=null;function actx(){if(!AC){try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){AC=null;}}return AC;}
@@ -554,7 +563,7 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
     var key=STORY_KEYS[Math.floor(Math.random()*STORY_KEYS.length)];
     return {x:f.x,y:f.y,kind:'story',key:key,name:namesPool[Math.floor(Math.random()*namesPool.length)],done:false,bob:Math.random()*6};
   }
-  function spawnNeighbors(n){neighbors=[];for(var i=0;i<n;i++){var f=freeTile();if(Math.hypot(f.x-player.x,f.y-player.y)<140){i--;continue;}
+  function spawnNeighbors(n){neighbors.length=0;for(var i=0;i<n;i++){var f=freeTile();if(Math.hypot(f.x-player.x,f.y-player.y)<140){i--;continue;}
     neighbors.push(makeNeighbor(f));
   }}
   // Keep the world populated: replace people you've already dealt with, a few at a time, so
@@ -663,7 +672,7 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
   var resRespawnAt=0; // timestamp gate so materials trickle back slowly (not instantly)
   // place a resource somewhere on the map, never right on top of the player
   function addResource(kind){var tries=0,f;do{f=freeTile();tries++;}while(Math.hypot(f.x-player.x,f.y-player.y)<160&&tries<40);resources.push({x:f.x,y:f.y,kind:kind,bob:Math.random()*6});}
-  function spawnResources(){resources=[];
+  function spawnResources(){resources.length=0;
     for(var k in SPAWN.resInitial){for(var i=0;i<SPAWN.resInitial[k];i++)addResource(k);}
   }
   // Slow, capped replenishment. Instead of instantly refilling to a target every frame
@@ -680,7 +689,7 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
     for(var k in caps){var deficit=caps[k]-(c[k]||0);if(deficit>worst){worst=deficit;pick=k;}}
     if(pick){ addResource(pick); resRespawnAt = now + SPAWN.resRespawnMs; }
   }
-  function spawnRaiders(n){raiders=[];for(var i=0;i<n;i++)addRaider();}
+  function spawnRaiders(n){raiders.length=0;for(var i=0;i<n;i++)addRaider();}
   function mkRaider(x,y,tk){var T=RTYPE[tk];return {x:x,y:y,dir:Math.random()*6.28,wander:0,
     type:tk,hurt:0,dead:false,deadT:0,facing:'down',walk:0,
     state:'idle',
@@ -729,22 +738,21 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
     var wl=el('s-weapon');if(wl){var W=curWeapon();wl.textContent=W.label;wl.style.color=player.weapon==='fist'?'#8a7a9a':(player.weapon==='spear'||player.weapon==='sword'||player.weapon==='axe')?'#e8c860':'var(--ink)';}
   }
 
-  var battle=null;
   var MOTIVE_COLOR={경쟁:'#c0392b',불신:'#2a6fb0',명예:'#b8860b',화친:'#0f8f5f',굴복:'#888',질서:'#6a4fc0'};
 
   function startBattle(n,forced){S.mode='battle';var st=STORIES[n.key];
-    battle={n:n,story:st,nodeId:'start',foeHp:100,foeHpTarget:100,phase:'intro',msg:(forced?"먹을 걸 두고 딱 마주쳤다!\n":"")+st.intro,choices:null,cursor:0,after:null};
+    G.battle={n:n,story:st,nodeId:'start',foeHp:100,foeHpTarget:100,phase:'intro',msg:(forced?"먹을 걸 두고 딱 마주쳤다!\n":"")+st.intro,choices:null,cursor:0,after:null};
     el('hint').textContent='무엇을 할지 골라봐';}
-  function enterMenu(){var node=battle.story.nodes[battle.nodeId];battle.choices=node.choices;battle.cursor=0;battle.phase='menu';battle.menuText=(battle.nodeId==='start')?'어떻게 할까?':(battle.nodeText||'어떻게 할까?');}
-  function chooseCommand(idx){if(battle.phase!=='menu')return;var ch=battle.choices[idx];var r=ch.eff();clamp();render();
-    if(typeof r.foe==='number')battle.foeHpTarget=Math.max(0,Math.min(100,battle.foeHp+r.foe*10));
-    if(r.recruit)battle.recruit=true;   // this choice turns the NPC into a companion when the talk ends
-    battle.phase='msg';battle.msg=r.t;battle.philo=ch.line;battle.resultOk=r.ok;var st=battle.story;
-    if(S.wounds>=MAXHP){battle.after='death';}else if(r.next&&st.nodes[r.next]){battle.after='next';battle.nextNode=r.next;battle.nextNodeText=st.nodes[r.next].text;}else{battle.after='end';}}
-  function advanceBattle(){if(!battle)return;if(battle.phase==='intro'){enterMenu();return;}
-    if(battle.phase==='msg'){if(battle.after==='death'){S.mode='field';battle=null;endGame('사람');return;}
-      if(battle.after==='next'){battle.nodeId=battle.nextNode;battle.nodeText=battle.nextNodeText;enterMenu();return;}endBattle();return;}}
-  function endBattle(){var n=battle.n;var recruit=battle.recruit;n.done=true;S.mode='field';battle=null;el('hint').textContent='이동 WASD/조이스틱 · 공격 · 회피';player.y+=3;
+  function enterMenu(){var node=G.battle.story.nodes[G.battle.nodeId];G.battle.choices=node.choices;G.battle.cursor=0;G.battle.phase='menu';G.battle.menuText=(G.battle.nodeId==='start')?'어떻게 할까?':(G.battle.nodeText||'어떻게 할까?');}
+  function chooseCommand(idx){if(G.battle.phase!=='menu')return;var ch=G.battle.choices[idx];var r=ch.eff();clamp();render();
+    if(typeof r.foe==='number')G.battle.foeHpTarget=Math.max(0,Math.min(100,G.battle.foeHp+r.foe*10));
+    if(r.recruit)G.battle.recruit=true;   // this choice turns the NPC into a companion when the talk ends
+    G.battle.phase='msg';G.battle.msg=r.t;G.battle.philo=ch.line;G.battle.resultOk=r.ok;var st=G.battle.story;
+    if(S.wounds>=MAXHP){G.battle.after='death';}else if(r.next&&st.nodes[r.next]){G.battle.after='next';G.battle.nextNode=r.next;G.battle.nextNodeText=st.nodes[r.next].text;}else{G.battle.after='end';}}
+  function advanceBattle(){if(!G.battle)return;if(G.battle.phase==='intro'){enterMenu();return;}
+    if(G.battle.phase==='msg'){if(G.battle.after==='death'){S.mode='field';G.battle=null;endGame('사람');return;}
+      if(G.battle.after==='next'){G.battle.nodeId=G.battle.nextNode;G.battle.nodeText=G.battle.nextNodeText;enterMenu();return;}endBattle();return;}}
+  function endBattle(){var n=G.battle.n;var recruit=G.battle.recruit;n.done=true;S.mode='field';G.battle=null;el('hint').textContent='이동 WASD/조이스틱 · 공격 · 회피';player.y+=3;
     if(recruit){recruitCompanion(n);flash('「'+(QUEST_NAMES[n.key]||n.name||'동료')+'」이(가) 함께 다니기로 했다! 곁에서 싸움을 도와줄 거야.');}
     refreshNeighbors();}
 
@@ -779,8 +787,8 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
     giveRandomReward(n);
     n.done=true; n.phase='done';
     // celebrate on the top banner, then let it fade
-    questComplete.t=2600; questComplete.name=n.quest.t;
-    activeQuest=null; questMarker=null;
+    G.questComplete.t=2600; G.questComplete.name=n.quest.t;
+    G.activeQuest=null; G.questMarker=null;
     S.questsDone=(S.questsDone||0)+1;
     n._busy=false;
     refreshNeighbors();
@@ -853,7 +861,7 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
     if(act==='accept'){
       // BETRAYAL on accept: some "givers" attack the moment you lower your guard
       if(n.betrayer && Math.random()<0.6){betrayNow(n,'accept');return;}
-      activeQuest=n.quest; n.phase='active'; n.quest.startKills=S.killed;
+      G.activeQuest=n.quest; n.phase='active'; n.quest.startKills=S.killed;
       if(n.quest.type==='escort'){var g=freeTileNear(player.x,player.y,240,380);n.quest.goal={x:g.x,y:g.y};spawnQuestMarker(g.x,g.y);n._following=true;}
       flash('부탁을 들어주기로 했다: 「'+n.quest.t+'」 '+questHint(n.quest));
       closeQuest();return;
@@ -864,7 +872,7 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
       // gather quests consume the materials you hand over
       if(n.quest.type==='gather'&&n.quest.mat){S.inv[n.quest.mat]=Math.max(0,(S.inv[n.quest.mat]||0)-n.quest.need);}
       grantReward(n);
-      n.done=true; n.phase='done'; activeQuest=null; questMarker=null;
+      n.done=true; n.phase='done'; G.activeQuest=null; G.questMarker=null;
       closeQuest();
       refreshNeighbors();
       return;
@@ -1028,9 +1036,7 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
     if(n) {n.done=true;}
   }
 
-  var questMarker=null;
-  var questComplete={t:0,name:''};   // brief "퀘스트 완료!" celebration on the top banner
-  function spawnQuestMarker(x,y){questMarker={x:x,y:y};}
+  function spawnQuestMarker(x,y){G.questMarker={x:x,y:y};}
 
   // companions trail behind the player and slay raiders that wander too close
   function updateCompanions(dt){
@@ -1343,7 +1349,7 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
     if(player.weapon==='rock'){ctx.fillStyle=W.blade;ctx.beginPath();ctx.arc(tx,ty,3.5,0,6.3);ctx.fill();}
   }
 
-  function drawField(){calmDay=Math.max(0,Math.min(1,1-((S.day-1)+Math.min(1,dayTimer/DAY_MS)-2.5)*0.5));drawMap();
+  function drawField(){G.calmDay=Math.max(0,Math.min(1,1-((S.day-1)+Math.min(1,G.dayTimer/DAY_MS)-2.5)*0.5));drawMap();
     drawStructures();
     drawResources();
     drawFood();
@@ -1376,7 +1382,7 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
         ctx.restore();
       }});
     // quest destination marker (reach quests)
-    if(questMarker){var qsx=questMarker.x-cam.x,qsy=questMarker.y-cam.y;var qp=0.5+0.5*Math.sin(performance.now()/250);
+    if(G.questMarker){var qsx=G.questMarker.x-cam.x,qsy=G.questMarker.y-cam.y;var qp=0.5+0.5*Math.sin(performance.now()/250);
       ctx.save();ctx.globalAlpha=0.5+qp*0.5;ctx.strokeStyle='#9affa0';ctx.lineWidth=3;ctx.beginPath();ctx.arc(qsx,qsy,16+qp*4,0,6.28);ctx.stroke();
       ctx.fillStyle='#9affa0';ctx.font='bold 16px "Courier New",monospace';ctx.textAlign='center';ctx.fillText('◆',qsx,qsy-22);ctx.restore();}
     // companions
@@ -1399,7 +1405,7 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
       ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillText(F.txt,fsx+1,fsy+1);ctx.fillStyle=F.col;ctx.fillText(F.txt,fsx,fsy);ctx.restore();}
 
     // ===== ATMOSPHERE LAYERS — driven by `darkness` (0 bright noon → 1 night) =====
-    var now=performance.now();var D=darkness;
+    var now=performance.now();var D=G.darkness;
     var calm=(S.day<=2)?1:0;                      // peaceful days 1-2: bright, sunny, alive
     // 1) drifting clouds/haze (gentle on calm days)
     ctx.save();ctx.fillStyle=calm?'#f0e6fa':'#c4b6d6';
@@ -1462,12 +1468,12 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
       ctx.restore();}
 
     // ===== QUEST COMPLETE celebration (brief, replaces the tracker for a moment) =====
-    if(questComplete.t>0){
-      var qa=Math.min(1, questComplete.t/500);   // fade out in the last 500ms
+    if(G.questComplete.t>0){
+      var qa=Math.min(1, G.questComplete.t/500);   // fade out in the last 500ms
       ctx.save();ctx.globalAlpha=qa;ctx.textAlign='center';ctx.textBaseline='top';
       ctx.font='bold 14px "Courier New",monospace';
       var clabel='✓ 퀘스트 완료!';
-      var csub='「'+questComplete.name+'」';
+      var csub='「'+G.questComplete.name+'」';
       ctx.font='bold 14px "Courier New",monospace';var cw1=ctx.measureText(clabel).width;
       ctx.font='11px "Courier New",monospace';var cw2=ctx.measureText(csub).width;
       var cbw=Math.max(cw1,cw2)+40, cbx=VW/2-cbw/2, cby=88;
@@ -1478,12 +1484,12 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
       ctx.restore();
     } else
     // ===== ACTIVE QUEST TRACKER (top banner, so you never forget your current task) =====
-    if(activeQuest && dayBanner.t<=0){
-      var done=questProgress(activeQuest);
+    if(G.activeQuest && dayBanner.t<=0){
+      var done=questProgress(G.activeQuest);
       // find the giver npc for this quest
-      var giver=null;for(var gq=0;gq<neighbors.length;gq++){if(neighbors[gq].quest===activeQuest&&!neighbors[gq].done){giver=neighbors[gq];break;}}
-      var qt=activeQuest.t;
-      var qh=done ? '완료! 다가가서 Space로 선물을 받자.' : questHint(activeQuest);
+      var giver=null;for(var gq=0;gq<neighbors.length;gq++){if(neighbors[gq].quest===G.activeQuest&&!neighbors[gq].done){giver=neighbors[gq];break;}}
+      var qt=G.activeQuest.t;
+      var qh=done ? '완료! 다가가서 Space로 선물을 받자.' : questHint(G.activeQuest);
       ctx.save();ctx.textAlign='center';ctx.textBaseline='top';
       ctx.font='bold 12px "Courier New",monospace';
       var label=(done?'✓ ':'◈ ')+qt;
@@ -1496,7 +1502,7 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
       ctx.restore();
       // guide arrow: toward the escort goal (in progress) OR back toward the giver (when done)
       var target=null, acol='#9affa0';
-      if(activeQuest.type==='escort'&&!done&&activeQuest.goal&&questMarker){ target=activeQuest.goal; }
+      if(G.activeQuest.type==='escort'&&!done&&G.activeQuest.goal&&G.questMarker){ target=G.activeQuest.goal; }
       else if(done&&giver){ target={x:giver.x,y:giver.y}; }
       if(target){
         var gsx=target.x-cam.x, gsy=target.y-cam.y;
@@ -1555,11 +1561,11 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
     var gr=ctx.createLinearGradient(0,H*0.60,0,H);gr.addColorStop(0,'#3a3052');gr.addColorStop(1,'#211a36');ctx.fillStyle=gr;ctx.fillRect(0,H*0.60,W,H*0.40);
     // platforms (shadow pools)
     ctx.fillStyle='rgba(0,0,0,0.28)';ctx.beginPath();ctx.ellipse(W*0.74,H*0.40+24,104,24,0,0,6.3);ctx.fill();ctx.beginPath();ctx.ellipse(W*0.26,H*0.72+18,118,28,0,0,6.3);ctx.fill();
-    if(battle.foeHp>battle.foeHpTarget)battle.foeHp=Math.max(battle.foeHpTarget,battle.foeHp-2.5);else if(battle.foeHp<battle.foeHpTarget)battle.foeHp=Math.min(battle.foeHpTarget,battle.foeHp+2.5);
-    var st=battle.story;
+    if(G.battle.foeHp>G.battle.foeHpTarget)G.battle.foeHp=Math.max(G.battle.foeHpTarget,G.battle.foeHp-2.5);else if(G.battle.foeHp<G.battle.foeHpTarget)G.battle.foeHp=Math.min(G.battle.foeHpTarget,G.battle.foeHp+2.5);
+    var st=G.battle.story;
     panelBox(16,18,250,54);
-    pixelText(st.name+' · '+battle.n.name,26,26,14,'#f0e2fa',true);pixelText('Lv'+st.lvl,222,26,13,'#c79be8',true);
-    pixelText('마음',26,50,12,'#d488c8',true);drawHPBar(62,52,180,battle.foeHp/100);
+    pixelText(st.name+' · '+G.battle.n.name,26,26,14,'#f0e2fa',true);pixelText('Lv'+st.lvl,222,26,13,'#c79be8',true);
+    pixelText('마음',26,50,12,'#d488c8',true);drawHPBar(62,52,180,G.battle.foeHp/100);
     drawTrainerStatic(W*0.74,H*0.40+Math.sin(now/400)*2.5,5.0,C[st.c]);
     panelBox(W-266,H*0.60-4,250,54);
     pixelText('나',W-256,H*0.60+4,15,'#f0e2fa',true);pixelText(['멀쩡','다침','많이 다침','위험!'][Math.min(3,S.wounds)],W-160,H*0.60+4,13,'#d4a4f0',true);
@@ -1569,12 +1575,12 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
     var bv=ctx.createRadialGradient(W/2,H*0.4,H*0.3,W/2,H*0.4,W*0.7);bv.addColorStop(0,'rgba(0,0,0,0)');bv.addColorStop(1,'rgba(12,6,20,0.5)');ctx.fillStyle=bv;ctx.fillRect(0,0,W,H*0.6);
     var bx=10,by=H-150,bw=W-20,bh=140;
     panelBox(bx,by,bw,bh,true);
-    if(battle.phase==='intro'){wrapText(cleanMsg(battle.msg),bx+22,by+18,bw-44,22,13.5,'#ece3d2',by+bh-30);if(Math.floor(now/400)%2===0)pixelText('▶ 눌러서 계속',bx+bw-150,by+bh-26,13,'#c79be8',false);}
-    else if(battle.phase==='menu'){pixelText(battle.menuText,bx+22,by+14,15,'#f0e6d0',true);var cmds=battle.choices,oy=by+40,rh=26;
+    if(G.battle.phase==='intro'){wrapText(cleanMsg(G.battle.msg),bx+22,by+18,bw-44,22,13.5,'#ece3d2',by+bh-30);if(Math.floor(now/400)%2===0)pixelText('▶ 눌러서 계속',bx+bw-150,by+bh-26,13,'#c79be8',false);}
+    else if(G.battle.phase==='menu'){pixelText(G.battle.menuText,bx+22,by+14,15,'#f0e6d0',true);var cmds=G.battle.choices,oy=by+40,rh=26;
       for(var i=0;i<cmds.length;i++){var cy=oy+i*rh,mc=MOTIVE_COLOR[cmds[i].m]||'#ece3d2';
-        if(i===battle.cursor){ctx.fillStyle='rgba(199,155,232,0.16)';roundRect(bx+14,cy-2,bw-28,rh-3,5);ctx.fill();ctx.fillStyle='#c79be8';ctx.beginPath();ctx.moveTo(bx+20,cy+4);ctx.lineTo(bx+28,cy+10);ctx.lineTo(bx+20,cy+16);ctx.fill();}
-        ctx.fillStyle=mc;ctx.beginPath();ctx.arc(bx+36,cy+9,4,0,6.3);ctx.fill();pixelText(cmds[i].label,bx+46,cy+1,13,i===battle.cursor?'#fff':'#d8cdb6',i===battle.cursor);}}
-    else if(battle.phase==='msg'){var endY=wrapText(cleanMsg(battle.msg),bx+22,by+16,bw-44,21,13,battle.resultOk?'#7ad88a':'#e88070',by+bh-40);wrapText(battle.philo,bx+22,endY+4,bw-44,16,11,'#9a8f76',by+bh-16);if(Math.floor(now/400)%2===0)pixelText('▶ 눌러서 계속',bx+bw-150,by+bh-22,12,'#c79be8',false);}}
+        if(i===G.battle.cursor){ctx.fillStyle='rgba(199,155,232,0.16)';roundRect(bx+14,cy-2,bw-28,rh-3,5);ctx.fill();ctx.fillStyle='#c79be8';ctx.beginPath();ctx.moveTo(bx+20,cy+4);ctx.lineTo(bx+28,cy+10);ctx.lineTo(bx+20,cy+16);ctx.fill();}
+        ctx.fillStyle=mc;ctx.beginPath();ctx.arc(bx+36,cy+9,4,0,6.3);ctx.fill();pixelText(cmds[i].label,bx+46,cy+1,13,i===G.battle.cursor?'#fff':'#d8cdb6',i===G.battle.cursor);}}
+    else if(G.battle.phase==='msg'){var endY=wrapText(cleanMsg(G.battle.msg),bx+22,by+16,bw-44,21,13,G.battle.resultOk?'#7ad88a':'#e88070',by+bh-40);wrapText(G.battle.philo,bx+22,endY+4,bw-44,16,11,'#9a8f76',by+bh-16);if(Math.floor(now/400)%2===0)pixelText('▶ 눌러서 계속',bx+bw-150,by+bh-22,12,'#c79be8',false);}}
 
   // dark parchment / metal-edged panel
   function panelBox(x,y,w,h,big){var g=ctx.createLinearGradient(x,y,x,y+h);g.addColorStop(0,'#2e2444');g.addColorStop(1,'#1c1430');ctx.fillStyle=g;roundRect(x,y,w,h,big?10:8);ctx.fill();
@@ -1588,8 +1594,8 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
     var sl=document.getElementById('story-layer'), so=document.getElementById('story');
     if(sl&&so){ sl.style.display = (so.innerHTML.trim()!=='') ? 'flex' : 'none'; }
     ctx.save();
-    if(shake>0.3){var sa=shake;ctx.translate((Math.random()-0.5)*sa,(Math.random()-0.5)*sa);}
-    if(S.mode==='battle'&&battle){drawBattle();}else{updateCam();drawField();}
+    if(G.shake>0.3){var sa=G.shake;ctx.translate((Math.random()-0.5)*sa,(Math.random()-0.5)*sa);}
+    if(S.mode==='battle'&&G.battle){drawBattle();}else{updateCam();drawField();}
     ctx.restore();
     requestAnimationFrame(frame);}
   function nearNeighbor(){var now=performance.now();
@@ -1605,7 +1611,6 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
   }
 
   var keys={};
-  var wantInteract=false;   // set when the player presses SPACE near an NPC
   // ===== MOBILE TOUCH CONTROLS: virtual joystick + attack/dash buttons =====
   var joyVec={x:0,y:0,active:false};
   var isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints>0);
@@ -1637,16 +1642,16 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
       b.addEventListener('touchstart',function(e){ fn(); e.preventDefault(); },{passive:false});
       b.addEventListener('mousedown',function(e){ if(!isTouch) return; fn(); e.preventDefault(); });
     }
-    bindBtn('btn-hit', function(){ if(nearNeighbor()){ wantInteract=true; } else { doAttack(); } });
+    bindBtn('btn-hit', function(){ if(nearNeighbor()){ G.wantInteract=true; } else { doAttack(); } });
     bindBtn('btn-dash', function(){ doDash(); });
   })();
 
   window.addEventListener('keydown',function(e){var k=e.key.toLowerCase();
-    if(S.mode==='battle'){if(battle&&battle.phase==='menu'){if(k==='arrowup'||k==='w'){battle.cursor=(battle.cursor+battle.choices.length-1)%battle.choices.length;e.preventDefault();}else if(k==='arrowdown'||k==='s'){battle.cursor=(battle.cursor+1)%battle.choices.length;e.preventDefault();}else if(k==='enter'||k===' '||k==='z'){chooseCommand(battle.cursor);e.preventDefault();}}else if(battle&&(battle.phase==='intro'||battle.phase==='msg')){if(k==='enter'||k===' '||k==='z'){advanceBattle();e.preventDefault();}}return;}
+    if(S.mode==='battle'){if(G.battle&&G.battle.phase==='menu'){if(k==='arrowup'||k==='w'){G.battle.cursor=(G.battle.cursor+G.battle.choices.length-1)%G.battle.choices.length;e.preventDefault();}else if(k==='arrowdown'||k==='s'){G.battle.cursor=(G.battle.cursor+1)%G.battle.choices.length;e.preventDefault();}else if(k==='enter'||k===' '||k==='z'){chooseCommand(G.battle.cursor);e.preventDefault();}}else if(G.battle&&(G.battle.phase==='intro'||G.battle.phase==='msg')){if(k==='enter'||k===' '||k==='z'){advanceBattle();e.preventDefault();}}return;}
     if(S.mode!=='field')return;
     if(k===' '||k==='enter'){
       // SPACE talks to a nearby villager (or turns in a finished quest); otherwise it attacks.
-      if(nearNeighbor()){ wantInteract=true; } else { doAttack(); }
+      if(nearNeighbor()){ G.wantInteract=true; } else { doAttack(); }
       e.preventDefault();return;
     }
     if(k==='j'||k==='z'){doAttack();e.preventDefault();return;}
@@ -1666,13 +1671,13 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
   cv.addEventListener('touchstart',function(e){var p=pos(e);if(S.mode!=='field'){battlePoint(p);}e.preventDefault();},{passive:false});
   cv.addEventListener('touchmove',function(e){e.preventDefault();},{passive:false});
   cv.addEventListener('touchend',function(e){dragging=false;dragTarget=null;downPt=null;});
-  function battlePoint(p){if(S.mode==='battle'&&battle){
-    if(battle.phase==='intro'||battle.phase==='msg'){advanceBattle();return;}
-    if(battle.phase==='menu'){
+  function battlePoint(p){if(S.mode==='battle'&&G.battle){
+    if(G.battle.phase==='intro'||G.battle.phase==='msg'){advanceBattle();return;}
+    if(G.battle.phase==='menu'){
       // must match drawBattle's menu layout exactly: by=H-150, oy=by+40, rh=26
       var by=VH-150, oy=by+40, rh=26;
-      for(var i=0;i<battle.choices.length;i++){var cy=oy+i*rh;
-        if(p.y>=cy-4&&p.y<=cy+rh-2){battle.cursor=i;chooseCommand(i);return;}}
+      for(var i=0;i<G.battle.choices.length;i++){var cy=oy+i*rh;
+        if(p.y>=cy-4&&p.y<=cy+rh-2){G.battle.cursor=i;chooseCommand(i);return;}}
       // tap anywhere below the last option (near the box bottom) selects the highlighted one
     }
   }}
@@ -1750,8 +1755,8 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
 
   function killRaider(rd,back){
     rd.dead=true;rd.deadT=620;S.killed++;
-    if(back){sfxBackstab();addShake(7);hitStop=70;floatText(rd.x,rd.y-30,'뒤에서 한 방!','#e8c0ff');}
-    else{sfxKill();addShake(6);hitStop=45;floatText(rd.x,rd.y-30,(RTYPE[rd.type]||RTYPE.prowler).name+' 처치','#d8b0ff');}
+    if(back){sfxBackstab();addShake(7);G.hitStop=70;floatText(rd.x,rd.y-30,'뒤에서 한 방!','#e8c0ff');}
+    else{sfxKill();addShake(6);G.hitStop=45;floatText(rd.x,rd.y-30,(RTYPE[rd.type]||RTYPE.prowler).name+' 처치','#d8b0ff');}
     // BRUTISH escalation: each body draws more — and may immediately call a nearby ally to alert
     raiders.forEach(function(o){if(!o.dead&&Math.hypot(o.x-rd.x,o.y-rd.y)<140){o.state='alert';o.wander=0;}});
     render();
@@ -1774,11 +1779,11 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
 
   function stepLoop(){var now=performance.now();var dt=Math.min(50,now-lastTick);lastTick=now;
     // hit-stop freezes the world briefly for impact
-    if(hitStop>0){hitStop-=dt; if(hitStop>0){setTimeout(stepLoop,16);return;}}
+    if(G.hitStop>0){G.hitStop-=dt; if(G.hitStop>0){setTimeout(stepLoop,16);return;}}
     // always-on decays
     if(dayBanner.t>0)dayBanner.t-=dt;
-    if(questComplete.t>0)questComplete.t-=dt;
-    if(shake>0)shake=Math.max(0,shake-dt*0.03);
+    if(G.questComplete.t>0)G.questComplete.t-=dt;
+    if(G.shake>0)G.shake=Math.max(0,G.shake-dt*0.03);
     for(var fl=floaters.length-1;fl>=0;fl--){var F=floaters[fl];F.t-=dt;F.y+=F.vy*dt*0.06;if(F.t<=0)floaters.splice(fl,1);}
 
     if(S.mode==='field'&&!S.over){var dx=0,dy=0;
@@ -1801,8 +1806,8 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
       }
 
       // ---------- TIME: day + a SLOW, CONTINUOUS darkening ----------
-      dayTimer+=dt;
-      if(dayTimer>=DAY_MS){dayTimer-=DAY_MS;S.day+=1;showDayBanner(S.day);adjustRaiders();render();
+      G.dayTimer+=dt;
+      if(G.dayTimer>=DAY_MS){G.dayTimer-=DAY_MS;S.day+=1;showDayBanner(S.day);adjustRaiders();render();
         if(S.day===2){flash('둘째 날도 화창해! 재료를 모아 🔨 조합 창에서 쉼터·무기·갑옷을 만들어 두자.');}
         else if(S.day===3){flash('셋째 날. 여전히 평화롭다… 그래도 슬슬 무기랑 갑옷을 갖춰 두면 좋겠어.');}
         else if(S.day===4){S.fear=Math.min(10,S.fear+2);
@@ -1813,9 +1818,9 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
       // world dims smoothly minute-by-minute instead of jumping at each dawn. It stays bright
       // and "innocent" for the first ~3 days, then creeps down without ever quite stopping —
       // the planet keeps pretending to be gentle while slowly turning cruel.
-      var progress=(S.day-1)+Math.min(1,dayTimer/DAY_MS);   // 0 at start of day 1
+      var progress=(S.day-1)+Math.min(1,G.dayTimer/DAY_MS);   // 0 at start of day 1
       var darkTarget=Math.min(0.9, Math.max(0,(progress-2.5))*0.075); // barely moves days 1-3, then a slow steady slide
-      darkness+=(darkTarget-darkness)*Math.min(1,dt/1400);  // gentle easing (slower than before)
+      G.darkness+=(darkTarget-G.darkness)*Math.min(1,dt/1400);  // gentle easing (slower than before)
 
       // ---------- POOR / WELL-FED: hunger drains, but a full belly mends wounds ----------
       var mending=(S.hunger>=96 && S.wounds>0);
@@ -1876,7 +1881,7 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
         var ft=FOOD_TYPES[f.kind]||FOOD_TYPES.berry;
         foods.splice(i,1);S.hunger=Math.min(100,S.hunger+ft.heal);clamp();
         sfxEat();floatText(player.x,player.y-26,ft.name+' +'+'배부름','#9affc0');
-        if(activeQuest&&activeQuest.type==='forage'&&activeQuest.prog<activeQuest.need){activeQuest.prog++;floatText(player.x,player.y-42,'모으기 '+activeQuest.prog+'/'+activeQuest.need,'#c79be8');}
+        if(G.activeQuest&&G.activeQuest.type==='forage'&&G.activeQuest.prog<G.activeQuest.need){G.activeQuest.prog++;floatText(player.x,player.y-42,'모으기 '+G.activeQuest.prog+'/'+G.activeQuest.need,'#c79be8');}
         if(S.day<=3){flash('「'+ft.name+'」을(를) 먹었다! 배가 찬다.'+(ft.heal>=40?' 아주 든든해!':''));}
         else{flash('「'+ft.name+'」을(를) 먹었다! — 그런데 냄새를 맡고 누군가 다가온다…');
           var lure=1+(Math.random()<0.5?1:0);for(var lg=0;lg<lure;lg++){var rr=freeTileNear(player.x,player.y,150,240);addRaiderAt(rr.x,rr.y);}}
@@ -1907,22 +1912,22 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
 
       // ---------- NPC encounters: press SPACE near someone to talk / turn in a quest ----------
       var n=nearNeighbor();
-      if(n && wantInteract){
+      if(n && G.wantInteract){
         // survive quests still auto-count time by standing near; SPACE handles everything else
         // and also collects the reward once the quest is complete.
         if(n.kind==='quest') interactQuest(n); else startBattle(n,false);
       }
-      wantInteract=false;   // consume the key press each tick
+      G.wantInteract=false;   // consume the key press each tick
 
       // ---------- QUEST progress ----------
-      if(activeQuest){
-        var giver=null;for(var gi2=0;gi2<neighbors.length;gi2++){if(neighbors[gi2].quest===activeQuest){giver=neighbors[gi2];break;}}
-        if(activeQuest.type==='survive'){
-          if(giver&&Math.hypot(player.x-giver.x,player.y-giver.y)<90){activeQuest.surviveT+=dt;
-            if(activeQuest.surviveT>=10000&&!activeQuest._rdy){activeQuest._rdy=true;floatText(player.x,player.y-40,'다 지켜줬다! 돌아가서 선물 받자','#9affa0');}
+      if(G.activeQuest){
+        var giver=null;for(var gi2=0;gi2<neighbors.length;gi2++){if(neighbors[gi2].quest===G.activeQuest){giver=neighbors[gi2];break;}}
+        if(G.activeQuest.type==='survive'){
+          if(giver&&Math.hypot(player.x-giver.x,player.y-giver.y)<90){G.activeQuest.surviveT+=dt;
+            if(G.activeQuest.surviveT>=10000&&!G.activeQuest._rdy){G.activeQuest._rdy=true;floatText(player.x,player.y-40,'다 지켜줬다! 돌아가서 선물 받자','#9affa0');}
           }
         }
-        if(activeQuest.type==='escort'&&activeQuest.goal){
+        if(G.activeQuest.type==='escort'&&G.activeQuest.goal){
           // the NPC actually follows the player (trailing a few steps behind)
           if(giver&&giver._following){
             var tx=player.x-24, ty=player.y+16, ddx=tx-giver.x, ddy=ty-giver.y, dl=Math.hypot(ddx,ddy)||1;
@@ -1931,13 +1936,13 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
               giver.walk=(giver.walk||0)+0.3; giver.facing=Math.abs(ddx)>Math.abs(ddy)?(ddx<0?'left':'right'):(ddy<0?'up':'down');}
             else giver.walk=0;
             // arrival is judged by the ESCORTED PERSON reaching the marker, not the player
-            if(Math.hypot(giver.x-activeQuest.goal.x,giver.y-activeQuest.goal.y)<44&&activeQuest.prog<1){
-              activeQuest.prog=1;questMarker=null;giver._following=false;
+            if(Math.hypot(giver.x-G.activeQuest.goal.x,giver.y-G.activeQuest.goal.y)<44&&G.activeQuest.prog<1){
+              G.activeQuest.prog=1;G.questMarker=null;giver._following=false;
               floatText(giver.x,giver.y-40,'도착! 고마워, 돌아가서 선물 줄게','#9affa0');}
           }
         }
-        if(activeQuest.type==='gather'){
-          if(questProgress(activeQuest)&&!activeQuest._rdy){activeQuest._rdy=true;floatText(player.x,player.y-40,'다 모았다! 돌아가서 건네주자','#9affa0');}
+        if(G.activeQuest.type==='gather'){
+          if(questProgress(G.activeQuest)&&!G.activeQuest._rdy){G.activeQuest._rdy=true;floatText(player.x,player.y-40,'다 모았다! 돌아가서 건네주자','#9affa0');}
         }
       }
 
@@ -1963,7 +1968,7 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
           if(rd.fleeT<=0||d>360){raiders.splice(k2,1);}
           continue;
         }
-        var sight=T.sight*(1+ (darkness*0.0)); // darkness doesn't help them; it isolates YOU
+        var sight=T.sight*(1+ (G.darkness*0.0)); // darkness doesn't help them; it isolates YOU
         // state machine
         if(d<sight){ if(rd.state!=='alert') sayLine(rd, TAUNTS_ATTACK, 0.25); rd.state='alert'; }
         else if(rd.state==='alert'&&d>sight*1.5)rd.state='idle';
@@ -2077,8 +2082,8 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
     if(bb) onTap(bb, function(){showOpeningScene(i-1);});
   }
   function startField(){
-    S.mode='field';el('story').innerHTML='';el('hint').textContent='이동 WASD/조이스틱 · 공격 · 회피';dayTimer=0;darkness=0;actx();showDayBanner(1);
-    raiders=[]; // days 1-2 are peaceful — no enemies at all
+    S.mode='field';el('story').innerHTML='';el('hint').textContent='이동 WASD/조이스틱 · 공격 · 회피';G.dayTimer=0;G.darkness=0;actx();showDayBanner(1);
+    raiders.length=0; // days 1-2 are peaceful — no enemies at all
     setTimeout(function(){if(!S.over)flash('글로리아 1일째, 화창해! 🪵나무·🪨돌·🌿덩굴·🍄버섯을 모아서 🔨조합 창을 열어 봐.');},900);
   }
 
@@ -2087,12 +2092,12 @@ import { VW, VH, TILE, RES, MAPC, MAPR, MW, MH, MAXHP, DAY_MS, HUNGER_RATE, DIFF
   function reset(){var fresh={over:false,mode:'intro',day:1,hunger:100,wounds:0,killed:0,fear:0,allies:0,betrayed:0,rep:0,armor:{helm:false,chest:false,arms:false,legs:false},questsDone:0,inv:{wood:0,stone:0,mushroom:0,fiber:0},built:{shelter:false,campfire:false}};
     for(var _k in S)delete S[_k];
     for(var _f in fresh)S[_f]=fresh[_f];
-    dayTimer=0;darkness=0;dayBanner.t=0;shake=0;floaters=[];hitStop=0;starveTimer=0;festerTimer=0;healTimer=0;
+    G.dayTimer=0;G.darkness=0;dayBanner.t=0;G.shake=0;floaters.length=0;G.hitStop=0;starveTimer=0;festerTimer=0;healTimer=0;
     player.atk=0;player.atkCool=0;player.hurt=0;player.inv=0;player.dashCd=0;player.dashT=0;player.weapon='fist';
-    armorDrops=[];companions=[];activeQuest=null;
-    genMap();player.x=MW/2;player.y=MH/2;player.facing='down';player.walk=0;foods=[];spawnFood(SPAWN.foodInitial);critters=[];ensureCritters();weapons=[];armorDrops=[];spawnResources();structures=[];spawnNeighbors(SPAWN.neighbors);spawnRaiders(0);adjustRaiders();el("log").innerHTML="";render();showOpening();}
+    armorDrops.length=0;companions.length=0;G.activeQuest=null;
+    genMap();player.x=MW/2;player.y=MH/2;player.facing='down';player.walk=0;foods.length=0;spawnFood(SPAWN.foodInitial);critters.length=0;ensureCritters();weapons.length=0;armorDrops.length=0;spawnResources();structures.length=0;spawnNeighbors(SPAWN.neighbors);spawnRaiders(0);adjustRaiders();el("log").innerHTML="";render();showOpening();}
 
-  genMap();player.x=MW/2;player.y=MH/2;spawnFood(SPAWN.foodInitial);critters=[];ensureCritters();weapons=[];armorDrops=[];spawnResources();structures=[];spawnNeighbors(SPAWN.neighbors);spawnRaiders(0);render();adjustRaiders();frame();stepLoop();showOpening();
+  genMap();player.x=MW/2;player.y=MH/2;spawnFood(SPAWN.foodInitial);critters.length=0;ensureCritters();weapons.length=0;armorDrops.length=0;spawnResources();structures.length=0;spawnNeighbors(SPAWN.neighbors);spawnRaiders(0);render();adjustRaiders();frame();stepLoop();showOpening();
 })();
 
 /* ===== viewport fit: was a second inline <script> at the end of the body ===== */
