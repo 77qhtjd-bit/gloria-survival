@@ -1,0 +1,16 @@
+{
+  "name": "glorya",
+  "version": "1.0.0",
+  "private": true,
+  "description": "글로리아 행성 표류기 — 캔버스 생존 게임 (단일 HTML 파일로 빌드)",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^8.2.0",
+    "vite-plugin-singlefile": "^2.3.3"
+  }
+}
