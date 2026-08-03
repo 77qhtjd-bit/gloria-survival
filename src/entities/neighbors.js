@@ -1,5 +1,6 @@
 // Quest-giving fellow survivors.
 // Moved verbatim from src/main.js (step 3: module split).
+import { STORY_KEYS } from '../stories.js';
 import { neighbors, player } from '../state.js';
 import { QUEST_GIVERS, makeQuest, namesPool, questProgress } from '../systems/quest.js';
 import { freeTile } from '../world/map.js';

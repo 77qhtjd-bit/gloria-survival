@@ -1,9 +1,9 @@
 import './styles.css';
 import { actx, sfxDash, sfxEat, sfxHurt } from './audio.js';
 import { DAY_MS, DIFF, HUNGER_RATE, MAPC, MAPR, MAXHP, MH, MOVE, MW, RES, SPAWN, TILE, VH, VW } from './data/balance.js';
-import { QUEST_NAMES, TAUNTS_ATTACK, TAUNTS_BETRAY, createStories } from './data/dialogue.js';
+import { QUEST_NAMES, TAUNTS_ATTACK, TAUNTS_BETRAY } from './data/dialogue.js';
 import { RTYPE, rollType } from './data/enemies.js';
-import { CRITTER_TYPES, FOOD_TYPES, MAT_ICON, createRecipes } from './data/items.js';
+import { CRITTER_TYPES, FOOD_TYPES, MAT_ICON } from './data/items.js';
 import { COL } from './data/palette.js';
 import { buildEnding, openingScenes } from './data/story.js';
 import { ARMOR_KINDS, ARMOR_NAME, WEAPONS, WEAPON_ORDER } from './data/weapons.js';
@@ -53,10 +53,6 @@ import { freeTileNear, genMap, solidAt } from './world/map.js';
 
   /* ===== STORY DATA — fellow crash survivors of the Gloria ===== */
 
-  // Built once at boot. The eff() bodies close over this exact S object, which is
-  // why reset() clears S in place instead of reassigning it.
-  var STORIES=createStories(S,moodTail);
-  var STORY_KEYS=Object.keys(STORIES);
 
 
 
@@ -70,9 +66,6 @@ import { freeTileNear, genMap, solidAt } from './world/map.js';
 
 
 
-  // make() bodies need game state and these helpers, so the list is built here.
-  var RECIPES=createRecipes({S:S,player:player,buildStructure:buildStructure,clamp:clamp,
-    flash:flash,floatText:floatText,makeWeapon:makeWeapon,sfxEat:sfxEat,wearArmor:wearArmor});
   window.__doCraft=doCraft;
   window.__openCraft=openCraft; window.__closeCraft=closeCraft;
 
@@ -363,11 +356,6 @@ import { freeTileNear, genMap, solidAt } from './world/map.js';
   // ===== ENDING — every death is solitary, poor, nasty, brutish, and short =====
 
 
-  function startField(){
-    S.mode='field';el('story').innerHTML='';el('hint').textContent='이동 WASD/조이스틱 · 공격 · 회피';G.dayTimer=0;G.darkness=0;actx();showDayBanner(1);
-    raiders.length=0; // days 1-2 are peaceful — no enemies at all
-    setTimeout(function(){if(!S.over)flash('글로리아 1일째, 화창해! 🪵나무·🪨돌·🌿덩굴·🍄버섯을 모아서 🔨조합 창을 열어 봐.');},900);
-  }
 
   // S is cleared IN PLACE, never reassigned: the STORIES and RECIPES factories in
   // src/data/ close over this object, so its identity has to survive a restart.

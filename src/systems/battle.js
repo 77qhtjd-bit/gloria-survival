@@ -1,5 +1,6 @@
 // Dialogue-battle flow.
 // Moved verbatim from src/main.js (step 3: module split).
+import { STORIES } from '../stories.js';
 import { MAXHP } from '../data/balance.js';
 import { QUEST_NAMES } from '../data/dialogue.js';
 import { recruitCompanion } from '../entities/companions.js';

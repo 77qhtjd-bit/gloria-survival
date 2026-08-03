@@ -1,11 +1,11 @@
 // HUD, story layer, craft modal and messages.
 // Moved verbatim from src/main.js (step 3: module split).
-import { sfxDread } from './audio.js';
+import { actx, sfxDread } from './audio.js';
 import { MAXHP } from './data/balance.js';
 import { buildEnding, openingScenes } from './data/story.js';
-import { addShake } from './render/fx.js';
-import { S, armorCount, curWeapon, player } from './state.js';
-import { alreadyHave, canAfford, costText, doCraft } from './systems/craft.js';
+import { addShake, showDayBanner } from './render/fx.js';
+import { G, S, armorCount, curWeapon, player, raiders } from './state.js';
+import { RECIPES, alreadyHave, canAfford, costText, doCraft } from './systems/craft.js';
 
 export function el(id){return document.getElementById(id);}
 
@@ -204,3 +204,9 @@ function showOpeningScene(i){
     // refit a few times early (fonts/icons loading can shift chrome height)
     var t=0, iv=setInterval(function(){ fit(); if(++t>6) clearInterval(iv); }, 200);
   })();
+
+function startField(){
+  S.mode='field';el('story').innerHTML='';el('hint').textContent='이동 WASD/조이스틱 · 공격 · 회피';G.dayTimer=0;G.darkness=0;actx();showDayBanner(1);
+  raiders.length=0; // days 1-2 are peaceful — no enemies at all
+  setTimeout(function(){if(!S.over)flash('글로리아 1일째, 화창해! 🪵나무·🪨돌·🌿덩굴·🍄버섯을 모아서 🔨조합 창을 열어 봐.');},900);
+}

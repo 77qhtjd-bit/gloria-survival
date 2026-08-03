@@ -1,5 +1,6 @@
 // Per-frame composition of the field and battle views.
 // Moved verbatim from src/main.js (step 3: module split).
+import { STORIES } from '../stories.js';
 import { DAY_MS, MAXHP, VH, VW } from '../data/balance.js';
 import { drawCritters } from '../entities/critters.js';
 import { drawArmorDrops, drawResources, drawWeapons } from '../entities/drops.js';

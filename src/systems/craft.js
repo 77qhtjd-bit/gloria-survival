@@ -1,9 +1,9 @@
 // Crafting bench actions.
 // Moved verbatim from src/main.js (step 3: module split).
-import { sfxDash } from '../audio.js';
-import { MAT_ICON } from '../data/items.js';
+import { sfxDash, sfxEat } from '../audio.js';
+import { MAT_ICON, createRecipes } from '../data/items.js';
 import { floatText } from '../render/fx.js';
-import { S, armorCount, player, structures, weapons } from '../state.js';
+import { S, armorCount, clamp, player, structures, weapons } from '../state.js';
 import { flash, render, updateCraftUI } from '../ui.js';
 import { freeTileNear } from '../world/map.js';
 
@@ -14,6 +14,10 @@ export function makeWeapon(kind,label){var prev=player.weapon;player.weapon=kind
 
 export function wearArmor(piece,label){S.armor[piece]=true;sfxDash();floatText(player.x,player.y-30,label+' 착용','#aee0ff');
   flash(label+'을(를) 만들어 둘렀다! 칼 한 번을 막아준다. (갑옷 '+armorCount()+'/4)');}
+
+// make() bodies need game state and these helpers, so the list is built here.
+export const RECIPES=createRecipes({S:S,player:player,buildStructure:buildStructure,clamp:clamp,
+  flash:flash,floatText:floatText,makeWeapon:makeWeapon,sfxEat:sfxEat,wearArmor:wearArmor});
 
 export function canAfford(rec){for(var k in rec.cost){if((S.inv[k]||0)<rec.cost[k])return false;}return true;}
 
