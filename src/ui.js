@@ -122,7 +122,10 @@ export function endGame(by){if(S.over&&S.mode==='over')return;S.over=true;S.mode
     +'<button id="btn-again" class="primary" style="padding:11px; font-weight:600;"><span class="emo" style="font-size:15px; vertical-align:-2px; margin-right:5px;">🔄</span>다시 도전하기</button>'
     +'<button id="btn-lev" style="padding:11px; font-weight:500;"><span class="emo" style="font-size:15px; vertical-align:-2px; margin-right:5px;">💡</span>이런 곳을 어떻게 바꿀 수 있을까?</button></div></div>';
   onTap(document.getElementById('btn-again'), reset);
-  onTap(document.getElementById('btn-lev'), function(){sendPrompt('방금 \'글로리아 행성 표류기\'라는 생존 게임을 해봤어. 규칙도 없고, 약속을 지키게 만들 사람도 없는 곳이었어. 누구나 칼 한 번에(특히 등 뒤에서) 서로를 쓰러뜨릴 수 있었어. 나는 '+S.day+'일을 버티고 '+S.killed+'명을 쓰러뜨렸지만 결국 \''+E.arch.t+'\'으로 죽었어. 이런 곳이 왜 이렇게 무섭고 불안정한지, 그리고 이런 곳을 평화롭게 바꾸려면 사람들이 왜 함께 규칙을 만들고 그 규칙을 지킬 \'힘 있는 누군가(정치, 국가)\'를 세우기로 약속하게 되는지, 중학생도 이해할 수 있게 쉽게 설명해줘.');});}
+  // The original ran embedded in a host app that supplied sendPrompt(). Standing
+  // alone there is no host, so guard the call instead of throwing; if the game is
+  // ever embedded again the button starts working with no further change.
+  onTap(document.getElementById('btn-lev'), function(){if(typeof window.sendPrompt!=='function')return;window.sendPrompt('방금 \'글로리아 행성 표류기\'라는 생존 게임을 해봤어. 규칙도 없고, 약속을 지키게 만들 사람도 없는 곳이었어. 누구나 칼 한 번에(특히 등 뒤에서) 서로를 쓰러뜨릴 수 있었어. 나는 '+S.day+'일을 버티고 '+S.killed+'명을 쓰러뜨렸지만 결국 \''+E.arch.t+'\'으로 죽었어. 이런 곳이 왜 이렇게 무섭고 불안정한지, 그리고 이런 곳을 평화롭게 바꾸려면 사람들이 왜 함께 규칙을 만들고 그 규칙을 지킬 \'힘 있는 누군가(정치, 국가)\'를 세우기로 약속하게 되는지, 중학생도 이해할 수 있게 쉽게 설명해줘.');});}
 
 function statCell(label,val){return '<div style="background:rgba(40,28,56,0.7); border:1px solid var(--edge); border-radius:8px; padding:6px 4px;"><div style="font-size:18px; font-weight:700; color:var(--ink);">'+val+'</div><div style="font-size:9.5px; color:var(--ink-faint); margin-top:1px;">'+label+'</div></div>';}
 
