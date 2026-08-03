@@ -235,7 +235,6 @@
   function _h2(c){if(_h2cache[c])return _h2cache[c];var s=c.replace('#','');if(s.length===3)s=s[0]+s[0]+s[1]+s[1]+s[2]+s[2];var v=[parseInt(s.slice(0,2),16),parseInt(s.slice(2,4),16),parseInt(s.slice(4,6),16)];_h2cache[c]=v;return v;}
   function _hx(n){n=Math.max(0,Math.min(255,Math.round(n)));var s=n.toString(16);return s.length<2?'0'+s:s;}
   function shade(col,amt){var p=_h2(col);return '#'+_hx(p[0]+amt)+_hx(p[1]+amt)+_hx(p[2]+amt);}
-  function _clampcache(){}
 
   // ===== detailed pixel trainer (GBA-style: 3-tone shading, face, hair highlights) =====
   function drawTrainer(cx,cy,u,c,facing,walk){
@@ -463,12 +462,15 @@
   var player={x:MW/2,y:MH/2,facing:'down',walk:0,atk:0,atkCool:0,hurt:0,inv:0,dashCd:0,dashT:0,dvx:0,dvy:0,weapon:'fist'};
   function curWeapon(){return WEAPONS[player.weapon]||WEAPONS.fist;}
   var weapons=[];  // dropped weapon pickups on the ground: {x,y,kind,bob}
+  // 현재 미사용 — 무기/방어구는 조합으로만 획득
   function spawnWeapons(n){weapons=[];for(var i=0;i<n;i++)addWeaponDrop();}
+  // 현재 미사용 — 무기/방어구는 조합으로만 획득
   function addWeaponDrop(kind){var f=freeTile();
     // early game favors weak weapons; later drops can be stronger
     if(!kind){var pool=S.day<=1?['stick','rock','dagger']:S.day<=2?['stick','rock','dagger','woodsword']:WEAPON_ORDER;
       kind=pool[Math.floor(Math.random()*pool.length)];}
     weapons.push({x:f.x,y:f.y,kind:kind,bob:Math.random()*6});}
+  // 현재 미사용 — 무기/방어구는 조합으로만 획득
   function ensureWeapons(){var min=S.day<=2?5:3;while(weapons.length<min)addWeaponDrop();}
 
   // ---- ARMOR pickups scattered in the field (rarer than weapons) ----
@@ -477,13 +479,14 @@
   var armorDrops=[]; // {x,y,piece,bob}
   var companions=[]; // allies that follow & fight for you
   var activeQuest=null; // current NPC mission
+  // 현재 미사용 — 무기/방어구는 조합으로만 획득
   function addArmorDrop(piece){var f=freeTile();if(!piece)piece=ARMOR_KINDS[Math.floor(Math.random()*ARMOR_KINDS.length)];armorDrops.push({x:f.x,y:f.y,piece:piece,bob:Math.random()*6});}
+  // 현재 미사용 — 무기/방어구는 조합으로만 획득
   function ensureArmor(){
     // a little armour lies around during the peaceful foraging days; scarce later
     var min=S.day<=1?3:S.day<=2?2:1;
     while(armorDrops.length<min)addArmorDrop();}
   function moveSpeed(){return 2.7 - S.wounds*0.45;}            // NASTY: wounds slow you
-  function atkCooldown(){return 300;}                          // fixed — no power growth; desire has no payoff
   function clamp(){if(S.hunger>100)S.hunger=100;if(S.hunger<0)S.hunger=0;if(S.fear>10)S.fear=10;if(S.fear<0)S.fear=0;if(S.wounds<0)S.wounds=0;}
 
 
@@ -916,7 +919,7 @@
     el('s-killed').textContent=S.killed;
     var hf=el('hunger-fill');if(hf){hf.style.width=S.hunger+'%';hf.style.background=S.hunger>50?'linear-gradient(90deg,#7a5aa8,#c79be8)':S.hunger>22?'linear-gradient(90deg,#9a6dc4,#c79be8)':'linear-gradient(90deg,#a82850,#d8487a)';}
     // life pips
-    var lp=el('life-pips');if(lp){var html='';for(var i=0;i<MAXHP;i++){var alive=i<(MAXHP-S.wounds-(S.wounds>=MAXHP?MAXHP:0));html+='<span style="font-size:15px;color:'+(i<MAXHP-S.wounds?'#d86a9a':'#3a2c44')+';">'+(i<MAXHP-S.wounds?'❤':'🖤')+'</span>';}lp.innerHTML=html;}
+    var lp=el('life-pips');if(lp){var html='';for(var i=0;i<MAXHP;i++){html+='<span style="font-size:15px;color:'+(i<MAXHP-S.wounds?'#d86a9a':'#3a2c44')+';">'+(i<MAXHP-S.wounds?'❤':'🖤')+'</span>';}lp.innerHTML=html;}
     var ap=el('armor-pips');if(ap){var n=armorCount();ap.innerHTML=n>0?('⛨'.repeat(n)+'<span style="color:#3a4452;">'+'⛨'.repeat(4-n)+'</span>'):'<span style="color:#3a4452;">갑옷 없음</span>';}
     var wl=el('s-weapon');if(wl){var W=curWeapon();wl.textContent=W.label;wl.style.color=player.weapon==='fist'?'#8a7a9a':(player.weapon==='spear'||player.weapon==='sword'||player.weapon==='axe')?'#e8c860':'var(--ink)';}
   }
@@ -1476,9 +1479,6 @@
     } else { rd._lastSay=now; }
   });}
 
-  // soft ground shadow under any actor
-  function groundShade(wx,wy,r){var sx=wx-cam.x,sy=wy-cam.y;ctx.save();ctx.fillStyle='rgba(0,0,0,0.28)';ctx.beginPath();ctx.ellipse(sx,sy+7,r,r*0.4,0,0,6.3);ctx.fill();ctx.restore();}
-
   // player drawn holding the current weapon, with a swing arc on attack
   // armour worn over the player sprite (scale 2.1) — coloured by material:
   //  wood pieces (helm, legs) = brown;  vine pieces (chest, arms) = green
@@ -1549,7 +1549,6 @@
   }
   function drawWeaponInHand(bx,by,tx,ty,ang,W){
     if(W.col){ // handle
-      var hbx=bx, hby=by;
       ctx.strokeStyle=W.col;ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(bx-Math.cos(ang)*4,by-Math.sin(ang)*4);ctx.lineTo(bx+Math.cos(ang)*5,by+Math.sin(ang)*5);ctx.stroke();
     }
     // guard for swords
@@ -1900,7 +1899,7 @@
   function solidAt(px,py){var tx=Math.floor(px/TILE),ty=Math.floor((py+6)/TILE);return solid(tx,ty);}
   function tryMove(nx,ny){var r=10;if(!solidAt(nx,player.y))player.x=Math.max(r,Math.min(MW-r,nx));if(!solidAt(player.x,ny))player.y=Math.max(r,Math.min(MH-r,ny));}
 
-  var speed=2.7, raiderSpeed=0.95, lastTick=performance.now();
+  var raiderSpeed=0.95, lastTick=performance.now();
 
   function facingVec(f){if(f==='up')return[0,-1];if(f==='down')return[0,1];if(f==='left')return[-1,0];return[1,0];}
 
