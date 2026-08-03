@@ -13,7 +13,7 @@ import { ensureResources, spawnResources } from './entities/drops.js';
 import { ensureFood, spawnFood } from './entities/food.js';
 import { nearNeighbor, spawnNeighbors } from './entities/neighbors.js';
 import { addRaiderAt, adjustRaiders, spawnRaiders } from './entities/raiders.js';
-import { battlePoint, downPt, dragTarget, dragging, joyVec, keys, pos } from './input.js';
+import { battlePoint, downPt, dragTarget, dragging, isTouch, joyVec, keys, pos } from './input.js';
 import { drawBattle, drawField } from './render/field.js';
 import { addShake, dayBanner, floatText, floaters, moodTail, sayLine, showDayBanner } from './render/fx.js';
 import { G, S, armorCount, armorDrops, clamp, companions, critters, ctx, cv, diff, foods, moveSpeed, neighbors, player, raiders, resources, structures, updateCam, weapons } from './state.js';
